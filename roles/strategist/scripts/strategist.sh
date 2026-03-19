@@ -92,9 +92,29 @@ run_claude() {
     unset CLAUDECODE
 
     # Запуск AI CLI с содержимым команды как промпт
+    local tmp_out
+    tmp_out=$(mktemp)
     "$AI_CLI" $AI_CLI_EXTRA_FLAGS \
         $AI_CLI_PROMPT_FLAG "$prompt" \
-        >> "$LOG_FILE" 2>&1
+        > "$tmp_out" 2>&1
+    local exit_code=$?
+    cat "$tmp_out" >> "$LOG_FILE"
+
+    # Детектор 401 — фундаментальная защита от тихого падения
+    if grep -q "OAuth token has expired\|401\|authentication_error" "$tmp_out" 2>/dev/null; then
+        log "CRITICAL: OAuth token expired! Run: claude /login"
+        notify "🔴 Экзокортекс: токен истёк" "Агент $command_file упал с 401. Запусти: claude /login"
+        notify_telegram "$command_file"
+        rm -f "$tmp_out"
+        return 1
+    fi
+    rm -f "$tmp_out"
+
+    if [ $exit_code -ne 0 ]; then
+        log "ERROR: claude exited with code $exit_code for $command_file"
+        notify "⚠️ Экзокортекс: ошибка агента" "strategist/$command_file завершился с кодом $exit_code"
+        return $exit_code
+    fi
 
     log "Completed scenario: $command_file"
 
