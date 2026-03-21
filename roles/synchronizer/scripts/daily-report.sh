@@ -1,113 +1,162 @@
 #!/bin/bash
 # daily-report.sh — ежедневный отчёт работы scheduler
-#
-# Формирует отчёт: что должно было сработать, что сработало, что нет.
-# Результат: DS-strategy/current/SchedulerReport YYYY-MM-DD.md
-#
-# Использование:
-#   daily-report.sh           # сформировать отчёт за сегодня
-#   daily-report.sh --dry-run # показать отчёт, не записывать
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STATE_DIR="$HOME/.local/state/exocortex"
-LOG_DIR="{{HOME_DIR}}/logs/synchronizer"
+STATUS_DIR="$STATE_DIR/status"
+LOG_DIR="$HOME/logs/synchronizer"
 STRATEGY_DIR="/Users/alexander/Github/DS-strategy"
 REPORT_DIR="$STRATEGY_DIR/current"
 ARCHIVE_DIR="$STRATEGY_DIR/archive/scheduler-reports"
 
 DATE=$(date +%Y-%m-%d)
 DOW=$(date +%u)
-HOUR=$(date +%H)
 WEEK=$(date +%V)
 
 DRY_RUN=false
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=true
 
 REPORT_FILE="$REPORT_DIR/SchedulerReport $DATE.md"
+STATUS_FILE="$REPORT_DIR/AGENTS-STATUS.md"
 SCHEDULER_LOG="$LOG_DIR/scheduler-$DATE.log"
-STRATEGIST_LOG="{{HOME_DIR}}/logs/strategist/$DATE.log"
 
-mkdir -p "$ARCHIVE_DIR"
+mkdir -p "$ARCHIVE_DIR" "$REPORT_DIR"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [daily-report] $1"
 }
 
-check_ran() {
-    local marker="$1"
-    if [ -f "$STATE_DIR/$marker-$DATE" ]; then
-        cat "$STATE_DIR/$marker-$DATE"
-        return 0
+load_status() {
+    local task="$1"
+    local file="$STATUS_DIR/${task}.status"
+
+    TASK_NAME="$task"
+    STATUS="missing"
+    EXIT_CODE=""
+    SUMMARY="status artifact missing"
+    START_TS=""
+    END_TS=""
+    LOG_PATH="$SCHEDULER_LOG"
+    UPDATED_AT=""
+
+    if [ -f "$file" ]; then
+        . "$file"
+    elif [ -f "$STATE_DIR/${task}-$DATE" ]; then
+        STATUS="success"
+        UPDATED_AT="$(cat "$STATE_DIR/${task}-$DATE")"
+        END_TS="$UPDATED_AT"
+        SUMMARY="derived from legacy daily marker"
+    elif [ "$task" = "extractor-inbox-check" ] && [ -f "$STATE_DIR/${task}-last" ]; then
+        STATUS="success"
+        UPDATED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+        END_TS="$UPDATED_AT"
+        SUMMARY="derived from legacy interval marker"
     fi
-    return 1
 }
 
-check_ran_week() {
-    local marker="$1"
-    if [ -f "$STATE_DIR/$marker-W$WEEK" ]; then
-        cat "$STATE_DIR/$marker-W$WEEK"
-        return 0
-    fi
-    return 1
-}
-
-check_interval() {
-    local marker="$1-last"
-    if [ -f "$STATE_DIR/$marker" ]; then
-        local ts ago
-        ts=$(cat "$STATE_DIR/$marker")
-        ago=$(( $(date +%s) - ts ))
-        echo "${ago} сек назад"
-        return 0
-    fi
-    return 1
-}
-
-compute_traffic_light() {
-    local color="GREEN"
-    local issues=""
-
-    if ! check_ran "synchronizer-code-scan" &>/dev/null; then
-        color="RED"
-        issues+="code-scan не запустился; "
-    fi
-
-    if (( 10#$HOUR >= 6 )) && ! check_ran "strategist-morning" &>/dev/null; then
-        color="RED"
-        issues+="strategist morning не запустился; "
-    fi
-
-    if [ -f "$SCHEDULER_LOG" ] && grep -q "push failed" "$SCHEDULER_LOG" 2>/dev/null; then
-        if [ "$color" = "GREEN" ]; then color="YELLOW"; fi
-        issues+="push failed (Mac оффлайн?); "
-    fi
-
-    if (( 10#$HOUR >= 23 )) && ! check_ran "strategist-note-review" &>/dev/null; then
-        if [ "$color" = "GREEN" ]; then color="YELLOW"; fi
-        issues+="note-review не запустился; "
-    fi
-
-    if [ "$DOW" = "1" ] && ! check_ran_week "strategist-week-review" &>/dev/null; then
-        if [ "$color" = "GREEN" ]; then color="YELLOW"; fi
-        issues+="week-review не запустился (Пн!); "
-    fi
-
-    local emoji label
-    case "$color" in
-        GREEN)  emoji="🟢"; label="Среда готова к работе" ;;
-        YELLOW) emoji="🟡"; label="Среда работает с замечаниями" ;;
-        RED)    emoji="🔴"; label="Критический сбой — требуется внимание" ;;
+render_status_badge() {
+    case "$1" in
+        success) echo "✅" ;;
+        skipped) echo "⏭️" ;;
+        running) echo "🟦" ;;
+        auth_failed|preflight_failed|failed|stale_lock) echo "❌" ;;
+        *) echo "⚪" ;;
     esac
+}
 
-    echo "$emoji|$label|${issues:-нет}"
+render_status_label() {
+    case "$1" in
+        success) echo "успех" ;;
+        skipped) echo "пропущено по правилам" ;;
+        running) echo "в процессе" ;;
+        auth_failed) echo "auth failure" ;;
+        preflight_failed) echo "preflight failure" ;;
+        stale_lock) echo "stale lock" ;;
+        failed) echo "ошибка" ;;
+        *) echo "нет статуса" ;;
+    esac
+}
+
+append_row() {
+    local index="$1"
+    local title="$2"
+    local task="$3"
+    load_status "$task"
+    local emoji label time_ref
+    emoji=$(render_status_badge "$STATUS")
+    label=$(render_status_label "$STATUS")
+    time_ref="${END_TS:-${UPDATED_AT:-—}}"
+    printf '| %s | %s | **%s %s** | %s |\n' "$index" "$title" "$emoji" "$label" "$time_ref"
+}
+
+build_problem_cards() {
+    local output=""
+    for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
+        load_status "$task"
+        case "$task:$STATUS" in
+            strategist-week-review:missing)
+                ;;
+            *:success|*:skipped|*:running)
+                ;;
+            *)
+                output+="### ${TASK_NAME}\n"
+                output+="- Статус: $(render_status_label "$STATUS")\n"
+                output+="- Обновлено: ${UPDATED_AT:-—}\n"
+                output+="- Exit code: ${EXIT_CODE:-—}\n"
+                output+="- Причина: ${SUMMARY:-—}\n"
+                output+="- Лог: ${LOG_PATH:-—}\n\n"
+                ;;
+        esac
+    done
+    printf '%b' "$output"
+}
+
+build_agents_status() {
+    local scheduler_state="not loaded"
+    if launchctl list | grep -q 'com.exocortex.scheduler'; then
+        scheduler_state="loaded"
+    fi
+
+    local health_state="not loaded"
+    if launchctl list | grep -q 'com.exocortex.health-check'; then
+        health_state="loaded"
+    fi
+
+    local auth_state="broken"
+    if "$HOME/.config/aist/anthropic_auth_helper.sh" >/dev/null 2>&1; then
+        auth_state="ok"
+    fi
+
+    cat <<EOF
+# AGENTS-STATUS
+
+- Scheduler: **$scheduler_state**
+- Health-check: **$health_state**
+- Auth helper: **$auth_state**
+- Updated: **$(date '+%Y-%m-%d %H:%M:%S')**
+
+## Tasks
+- strategist-morning: **$(load_status strategist-morning; render_status_label "$STATUS")**
+- strategist-note-review: **$(load_status strategist-note-review; render_status_label "$STATUS")**
+- strategist-week-review: **$(load_status strategist-week-review; render_status_label "$STATUS")**
+- synchronizer-code-scan: **$(load_status synchronizer-code-scan; render_status_label "$STATUS")**
+- synchronizer-daily-report: **$(load_status synchronizer-daily-report; render_status_label "$STATUS")**
+- extractor-inbox-check: **$(load_status extractor-inbox-check; render_status_label "$STATUS")**
+EOF
 }
 
 generate_report() {
-    local report=""
+    local failed_cards
+    failed_cards=$(build_problem_cards)
+    local headline="🟢 Среда готова к работе"
+    if [ -n "$failed_cards" ]; then
+        headline="🔴 Требуется внимание"
+    fi
 
-    report+="---
+    cat <<EOF
+---
 type: scheduler-report
 date: $DATE
 week: W$WEEK
@@ -116,111 +165,23 @@ agent: Синхронизатор
 
 # Отчёт планировщика: $DATE
 
-"
+## $headline
 
-    local tl_result tl_emoji tl_label tl_issues
-    tl_result=$(compute_traffic_light)
-    tl_emoji=$(echo "$tl_result" | cut -d'|' -f1)
-    tl_label=$(echo "$tl_result" | cut -d'|' -f2)
-    tl_issues=$(echo "$tl_result" | cut -d'|' -f3)
-
-    report+="## $tl_emoji $tl_label
-
-"
-    if [ "$tl_issues" != "нет" ]; then
-        report+="> **Замечания:** $tl_issues
-
-"
-    fi
-
-    report+="## Результаты
+## Результаты
 
 | # | Задача | Статус | Время |
-|---|--------|--------|-------|"
+|---|--------|--------|-------|
+$(append_row 1 "Сканирование кода" synchronizer-code-scan)
+$(append_row 2 "Стратег утренний" strategist-morning)
+$(append_row 3 "Разбор заметок" strategist-note-review)
+$(append_row 4 "Обзор недели" strategist-week-review)
+$(append_row 5 "Проверка входящих" extractor-inbox-check)
+$(append_row 6 "Отчёт планировщика" synchronizer-daily-report)
 
-    # 1. Code-scan
-    local cs_time
-    if cs_time=$(check_ran "synchronizer-code-scan"); then
-        report+="
-| 1 | Сканирование кода | **✅** | $cs_time |"
-    else
-        report+="
-| 1 | Сканирование кода | **❌** | — |"
-    fi
+## Проблемы и действия
 
-    # 2. Стратег утренний
-    local sm_time
-    if sm_time=$(check_ran "strategist-morning"); then
-        report+="
-| 2 | Стратег утренний | **✅** | $sm_time |"
-    else
-        report+="
-| 2 | Стратег утренний | **❌** | — |"
-    fi
-
-    # 3. Note-review (после 22:00)
-    if (( 10#$HOUR >= 22 )); then
-        local nr_time
-        if nr_time=$(check_ran "strategist-note-review"); then
-            report+="
-| 3 | Разбор заметок | **✅** | $nr_time |"
-        else
-            report+="
-| 3 | Разбор заметок | **❌** | — |"
-        fi
-    fi
-
-    # 4. Week-review (Пн)
-    if [ "$DOW" = "1" ]; then
-        local wr_time
-        if wr_time=$(check_ran_week "strategist-week-review"); then
-            report+="
-| 4 | Обзор недели | **✅** | $wr_time |"
-        else
-            report+="
-| 4 | Обзор недели | **❌** | — |"
-        fi
-    fi
-
-    # 5. Экстрактор inbox-check
-    local ic_detail
-    if ic_detail=$(check_interval "extractor-inbox-check"); then
-        report+="
-| 5 | Проверка входящих | **✅** | $ic_detail |"
-    else
-        report+="
-| 5 | Проверка входящих | **❌** | — |"
-    fi
-
-    report+="
-
-"
-
-    # Ошибки
-    report+="## Ошибки и предупреждения
-"
-    local warnings=""
-    if [ -f "$SCHEDULER_LOG" ]; then
-        warnings=$(grep -E "WARN:|ERROR:|failed" "$SCHEDULER_LOG" 2>/dev/null | sed 's/^/- /' || true)
-    fi
-
-    if [ -n "$warnings" ]; then
-        report+="
-$warnings
-
-**Что делать:**
-"
-        if echo "$warnings" | grep -q "push failed" 2>/dev/null; then
-            report+="- **push failed:** Mac был оффлайн. Запусти \`cd /Users/alexander/Github/DS-strategy && git pull --rebase && git push\`
-"
-        fi
-    else
-        report+="
-Нет ошибок. ✅
-"
-    fi
-
-    echo "$report"
+$(if [ -n "$failed_cards" ]; then printf '%s' "$failed_cards"; else printf 'Нет активных проблем. ✅\n'; fi)
+EOF
 }
 
 archive_old_reports() {
@@ -236,18 +197,20 @@ archive_old_reports() {
     done
 }
 
-# === Main ===
-
 log "=== Daily Report Started ==="
-
 REPORT=$(generate_report)
+AGENTS_STATUS=$(build_agents_status)
 
 if [ "$DRY_RUN" = true ]; then
     echo "$REPORT"
-    log "DRY RUN — отчёт не записан"
+    echo
+    echo "$AGENTS_STATUS"
+    log "DRY RUN — отчёты не записаны"
 else
     echo "$REPORT" > "$REPORT_FILE"
+    echo "$AGENTS_STATUS" > "$STATUS_FILE"
     log "Report written: $REPORT_FILE"
+    log "Agent status written: $STATUS_FILE"
 
     cd "$STRATEGY_DIR"
     git pull --rebase --quiet 2>/dev/null || log "WARN: pull --rebase failed (offline?)"
@@ -255,11 +218,11 @@ else
 
     archive_old_reports
 
-    git add "current/SchedulerReport"*.md 2>/dev/null || true
+    git add "current/SchedulerReport"*.md "current/AGENTS-STATUS.md" 2>/dev/null || true
     git add "archive/scheduler-reports/" 2>/dev/null || true
 
     if ! git diff --cached --quiet 2>/dev/null; then
-        git commit -m "auto: scheduler report $DATE" --quiet
+        git commit -m "auto: scheduler report $DATE" --quiet || log "WARN: commit failed"
         git push --quiet 2>/dev/null || log "WARN: push failed"
         log "Committed and pushed"
     else

@@ -2,32 +2,23 @@
 # Strategist (Стратег) Agent Runner
 # Запускает Claude Code с заданным сценарием
 
-set -e
+set -euo pipefail
 
-# Конфигурация
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 WORKSPACE="$HOME/Github/DS-strategy"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/strategist"
-CLAUDE_PATH="/usr/local/bin/claude"
+ENV_FILE="$HOME/.config/aist/env"
+DEFAULT_CLAUDE_PATH="/opt/homebrew/bin/claude"
 
-# AI CLI: переопределение через переменные окружения
-# По умолчанию: Claude Code. Примеры:
-#   AI_CLI=codex AI_CLI_PROMPT_FLAG=--prompt bash strategist.sh morning
-#   AI_CLI=aider AI_CLI_PROMPT_FLAG=--message AI_CLI_EXTRA_FLAGS="" bash strategist.sh morning
-AI_CLI="${AI_CLI:-$CLAUDE_PATH}"
 AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
 AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash --model claude-sonnet-4-6}"
 
-# Создаём папку для логов
 mkdir -p "$LOG_DIR"
 
-# Определяем день недели и тип сценария
-DAY_OF_WEEK=$(date +%u)  # 1=Mon, 7=Sun
+DAY_OF_WEEK=$(date +%u)
 DATE=$(date +%Y-%m-%d)
-
-# Лог файл
 LOG_FILE="$LOG_DIR/$DATE.log"
 
 log() {
@@ -46,8 +37,74 @@ notify_telegram() {
     "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist "$scenario" >> "$LOG_FILE" 2>&1 || true
 }
 
+load_env() {
+    if [ -f "$ENV_FILE" ]; then
+        set -a
+        source "$ENV_FILE"
+        set +a
+    fi
+}
+
+resolve_claude_path() {
+    if [ -n "${AI_CLI:-}" ]; then
+        echo "$AI_CLI"
+        return
+    fi
+    if [ -n "${CLAUDE_PATH:-}" ] && [ -x "${CLAUDE_PATH}" ]; then
+        echo "$CLAUDE_PATH"
+        return
+    fi
+    if [ -x "$DEFAULT_CLAUDE_PATH" ]; then
+        echo "$DEFAULT_CLAUDE_PATH"
+        return
+    fi
+    if command -v claude >/dev/null 2>&1; then
+        command -v claude
+        return
+    fi
+    return 1
+}
+
+preflight_check() {
+    local resolved_cli="$1"
+
+    if [ ! -x "$resolved_cli" ]; then
+        log "ERROR: Claude CLI not executable: $resolved_cli"
+        return 11
+    fi
+
+    if [ ! -f "$HOME/.claude/settings.json" ]; then
+        log "ERROR: ~/.claude/settings.json not found"
+        return 12
+    fi
+
+    if [ ! -f "$HOME/.config/aist/anthropic_auth_helper.sh" ]; then
+        log "ERROR: anthropic_auth_helper.sh not found"
+        return 13
+    fi
+
+    if [ ! -x "$HOME/.config/aist/anthropic_auth_helper.sh" ]; then
+        log "ERROR: anthropic_auth_helper.sh is not executable"
+        return 14
+    fi
+
+    if [ ! -f "$ENV_FILE" ]; then
+        log "ERROR: env file not found: $ENV_FILE"
+        return 15
+    fi
+
+    load_env
+
+    if ! "$HOME/.config/aist/anthropic_auth_helper.sh" >/dev/null 2>&1; then
+        log "ERROR: auth helper failed"
+        return 16
+    fi
+
+    return 0
+}
+
 fetch_wakatime_data() {
-    local mode="$1"  # "day" or "week"
+    local mode="$1"
     local fetch_script="$SCRIPT_DIR/fetch-wakatime.sh"
     if [ -x "$fetch_script" ]; then
         "$fetch_script" "$mode" 2>/dev/null || echo "(WakaTime данные недоступны)"
@@ -65,11 +122,22 @@ run_claude() {
         exit 1
     fi
 
-    # Читаем содержимое команды
+    local resolved_cli
+    resolved_cli=$(resolve_claude_path) || {
+        log "ERROR: Claude CLI not found"
+        notify "🔴 Экзокортекс: Claude CLI не найден" "Strategist/$command_file не может стартовать: claude не найден"
+        return 11
+    }
+
+    if ! preflight_check "$resolved_cli"; then
+        local code=$?
+        notify "🔴 Экзокортекс: preflight failed" "Strategist/$command_file не стартовал: проверь helper/env/claude"
+        return "$code"
+    fi
+
     local prompt
     prompt=$(cat "$command_path")
 
-    # Подставляем WakaTime данные в промпт (если есть плейсхолдеры)
     if echo "$prompt" | grep -q '{{WAKATIME_DAY}}'; then
         log "Fetching WakaTime data (day mode)"
         local waka_day
@@ -85,28 +153,27 @@ run_claude() {
 
     log "Starting scenario: $command_file"
     log "Command file: $command_path"
+    log "Claude path: $resolved_cli"
 
     cd "$WORKSPACE"
-
-    # Unset CLAUDECODE to allow nested sessions
     unset CLAUDECODE
 
-    # Запуск AI CLI с содержимым команды как промпт
     local tmp_out
     tmp_out=$(mktemp)
-    "$AI_CLI" $AI_CLI_EXTRA_FLAGS \
+    set +e
+    "$resolved_cli" $AI_CLI_EXTRA_FLAGS \
         $AI_CLI_PROMPT_FLAG "$prompt" \
         > "$tmp_out" 2>&1
     local exit_code=$?
+    set -e
     cat "$tmp_out" >> "$LOG_FILE"
 
-    # Детектор 401 — фундаментальная защита от тихого падения
-    if grep -q "OAuth token has expired\|401\|authentication_error" "$tmp_out" 2>/dev/null; then
-        log "CRITICAL: OAuth token expired! Run: claude /login"
-        notify "🔴 Экзокортекс: токен истёк" "Агент $command_file упал с 401. Запусти: claude /login"
+    if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set' "$tmp_out" 2>/dev/null; then
+        log "CRITICAL: Auth failed via helper/env/custom API"
+        notify "🔴 Экзокортекс: auth failure" "Агент $command_file упал: проверь ~/.config/aist/env и helper"
         notify_telegram "$command_file"
         rm -f "$tmp_out"
-        return 1
+        return 17
     fi
     rm -f "$tmp_out"
 
@@ -118,7 +185,6 @@ run_claude() {
 
     log "Completed scenario: $command_file"
 
-    # Push changes to GitHub (чтобы бот мог читать через API)
     if git -C "$WORKSPACE" diff --quiet origin/main..HEAD 2>/dev/null; then
         log "No unpushed commits"
     else
@@ -126,24 +192,19 @@ run_claude() {
         git -C "$WORKSPACE" push >> "$LOG_FILE" 2>&1 && log "Pushed to GitHub" || log "WARN: git push failed"
     fi
 
-    # Очистить staging area после Claude сессии (предотвращает staging leak в следующие скрипты)
-    # НЕ трогаем working tree — только unstage orphaned changes
     git -C "$WORKSPACE" reset --quiet 2>/dev/null || true
     log "Cleared staging area after Claude session"
 
-    # macOS notification
     local summary
     summary=$(tail -5 "$LOG_FILE" | grep -v '^\[' | head -3)
     notify "Стратег: $command_file" "$summary"
 }
 
-# Проверка: уже запускался ли сценарий сегодня
 already_ran_today() {
     local scenario="$1"
     [ -f "$LOG_FILE" ] && grep -q "Completed scenario: $scenario" "$LOG_FILE"
 }
 
-# File-based lock to prevent concurrent execution (RunAtLoad + CalendarInterval race)
 LOCK_DIR="$LOG_DIR/locks"
 mkdir -p "$LOCK_DIR"
 
@@ -154,21 +215,17 @@ acquire_lock() {
         log "SKIP: $scenario already running (lock exists: $lockfile)"
         exit 0
     fi
-    # Auto-cleanup lock on exit
     trap "rmdir '$lockfile' 2>/dev/null" EXIT
 }
 
-# Определяем какой сценарий запускать
-case "$1" in
+case "${1:-}" in
     "morning")
-        # Определяем нужный сценарий
         if [ "$DAY_OF_WEEK" -eq 1 ]; then
             SCENARIO="session-prep"
         else
             SCENARIO="day-plan"
         fi
 
-        # Защита от повторного запуска (RunAtLoad + CalendarInterval race condition)
         acquire_lock "$SCENARIO"
         if already_ran_today "$SCENARIO"; then
             log "SKIP: $SCENARIO already completed today"
@@ -193,7 +250,6 @@ case "$1" in
     "week-review")
         log "Sunday: running week review"
         run_claude "week-review"
-        # Fallback push for Knowledge Index (optional, skip if repo doesn't exist)
         KI_REPO="$HOME/Github/DS-Knowledge-Index-alexander"
         if [ -d "$KI_REPO/.git" ]; then
             if git -C "$KI_REPO" log --oneline -1 --since="1 hour ago" --grep="week-review" 2>/dev/null | grep -q .; then
@@ -215,14 +271,12 @@ case "$1" in
     "note-review")
         acquire_lock "note-review"
         log "Evening: running note review"
-        # Canary: count bold notes before
         FLEETING="$WORKSPACE/inbox/fleeting-notes.md"
         BOLD_BEFORE=$(grep -c '^\*\*' "$FLEETING" 2>/dev/null || echo 0)
         log "Canary: $BOLD_BEFORE bold notes before note-review"
 
         run_claude "note-review"
 
-        # Canary: count bold notes after — if same or more, Step 10 likely failed
         BOLD_AFTER=$(grep -c '^\*\*' "$FLEETING" 2>/dev/null || echo 0)
         log "Canary: $BOLD_AFTER"
         NON_BOLD=$(grep -c '^[^*#>-]' "$FLEETING" 2>/dev/null || echo 0)
@@ -231,12 +285,10 @@ case "$1" in
             log "WARN: Note-Review Step 10 may have failed — bold notes did not decrease ($BOLD_BEFORE → $BOLD_AFTER)"
         fi
 
-        # Deterministic cleanup: archive non-bold, non-🔄 notes (safety net for LLM Step 10)
         log "Running deterministic cleanup..."
         CLEANUP_OUTPUT=$(bash "$SCRIPT_DIR/cleanup-processed-notes.sh" 2>&1) || true
         log "Cleanup: $CLEANUP_OUTPUT"
 
-        # If cleanup made changes, commit and push
         if ! git -C "$WORKSPACE" diff --quiet -- inbox/fleeting-notes.md archive/notes/Notes-Archive.md 2>/dev/null; then
             git -C "$WORKSPACE" add inbox/fleeting-notes.md archive/notes/Notes-Archive.md
             git -C "$WORKSPACE" commit -m "chore: auto-cleanup processed notes from fleeting-notes.md" >> "$LOG_FILE" 2>&1 || true
@@ -246,11 +298,9 @@ case "$1" in
             log "Cleanup: no changes to commit"
         fi
 
-        # Alert if LLM failed AND cleanup was needed
         if [ "$BOLD_AFTER" -ge "$BOLD_BEFORE" ] && [ "$BOLD_BEFORE" -gt 0 ]; then
-            ENV_FILE="$HOME/.config/aist/env"
-            if [ -f "$ENV_FILE" ]; then
-                set -a; source "$ENV_FILE"; set +a
+            load_env
+            if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
                 ALERT_TEXT="⚠️ <b>Note-Review canary</b>: Step 10 не сработал ($BOLD_BEFORE → $BOLD_AFTER bold). Deterministic cleanup applied."
                 ALERT_JSON=$(printf '%s' "$ALERT_TEXT" | sed 's/\\/\\\\/g; s/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
                 ALERT_JSON="\"${ALERT_JSON}\""
@@ -273,15 +323,6 @@ case "$1" in
         ;;
     *)
         echo "Usage: $0 {morning|note-review|week-review|session-prep|strategy-session|day-plan|day-close}"
-        echo ""
-        echo "Scenarios:"
-        echo "  morning           - 4:00 EET daily (session-prep on Mon, day-plan others)"
-        echo "  note-review       - 23:00 EET daily (review fleeting notes + clean inbox)"
-        echo "  week-review       - Sunday 19:00 EET review for club"
-        echo "  session-prep      - Manual session prep (headless preparation)"
-        echo "  strategy-session  - Manual strategy session (interactive with user)"
-        echo "  day-plan          - Manual day plan"
-        echo "  day-close         - Manual day close (update WeekPlan + MEMORY + backup)"
         exit 1
         ;;
 esac
