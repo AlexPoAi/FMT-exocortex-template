@@ -52,6 +52,39 @@ escape_value() {
     printf '%s' "$1" | tr '\n' ' ' | sed 's/["\\]/\\&/g'
 }
 
+timestamp_to_epoch() {
+    local ts="$1"
+    [ -n "$ts" ] || {
+        echo 0
+        return
+    }
+    date -j -f '%Y-%m-%d %H:%M:%S' "$ts" '+%s' 2>/dev/null || date -d "$ts" '+%s' 2>/dev/null || echo 0
+}
+
+task_status_is_current() {
+    local task="$1"
+    local ref_ts="$2"
+    local ref_date ref_epoch age
+
+    ref_date=$(printf '%s' "$ref_ts" | cut -d' ' -f1)
+
+    case "$task" in
+        extractor-inbox-check)
+            if ! (( 10#$HOUR >= 7 && 10#$HOUR <= 23 )); then
+                [ "$ref_date" = "$DATE" ]
+                return
+            fi
+            ref_epoch=$(timestamp_to_epoch "$ref_ts")
+            [ "$ref_epoch" -gt 0 ] || return 1
+            age=$(( NOW - ref_epoch ))
+            [ "$age" -lt 10800 ]
+            ;;
+        *)
+            [ "$ref_date" = "$DATE" ]
+            ;;
+    esac
+}
+
 status_file_for() {
     local task="$1"
     echo "$STATUS_DIR/${task}.status"
@@ -365,7 +398,11 @@ show_status() {
         echo "$status_files" | while read -r f; do
             [ -f "$f" ] || continue
             . "$f"
-            echo "  ${TASK_NAME}: ${STATUS} (обновлено ${UPDATED_AT})"
+            if task_status_is_current "$TASK_NAME" "${END_TS:-${UPDATED_AT:-}}"; then
+                echo "  ${TASK_NAME}: ${STATUS} (обновлено ${UPDATED_AT})"
+            else
+                echo "  ${TASK_NAME}: stale (обновлено ${UPDATED_AT})"
+            fi
         done
     else
         echo "  нет запусков"

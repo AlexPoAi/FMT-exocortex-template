@@ -147,13 +147,9 @@ load_status() {
     local ref_ts
     ref_ts=$(task_reference_ts)
     if [ "$STATUS" != "missing" ] && ! task_status_is_current "$task" "$ref_ts"; then
-        STATUS="missing"
+        STATUS="stale"
         EXIT_CODE=""
         SUMMARY="status artifact from previous window"
-        START_TS=""
-        END_TS=""
-        LOG_PATH="$SCHEDULER_LOG"
-        UPDATED_AT=""
     fi
 }
 
@@ -162,6 +158,7 @@ render_status_badge() {
         success) echo "✅" ;;
         skipped) echo "⏭️" ;;
         running) echo "🟦" ;;
+        stale) echo "🟡" ;;
         auth_failed|billing_failed|model_unavailable|network_failed|timed_out|preflight_failed|failed|stale_lock) echo "❌" ;;
         *) echo "⚪" ;;
     esac
@@ -172,6 +169,7 @@ render_status_label() {
         success) echo "успех" ;;
         skipped) echo "пропущено по правилам" ;;
         running) echo "в процессе" ;;
+        stale) echo "устаревший статус" ;;
         auth_failed) echo "ошибка авторизации" ;;
         billing_failed) echo "ошибка баланса или квоты" ;;
         model_unavailable) echo "недоступна запрошенная модель" ;;

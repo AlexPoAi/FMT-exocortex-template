@@ -144,11 +144,9 @@ load_status() {
     local ref_ts
     ref_ts=$(task_reference_ts)
     if [ "$STATUS" != "missing" ] && ! task_status_is_current "$task" "$ref_ts"; then
-        STATUS="missing"
+        STATUS="stale"
         EXIT_CODE=""
         SUMMARY="status artifact from previous window"
-        UPDATED_AT=""
-        LOG_PATH=""
     fi
 }
 
@@ -191,7 +189,7 @@ for task in strategist-morning strategist-note-review strategist-week-review syn
             log "ОК: $task status=$STATUS"
             ;;
         *)
-            WARNINGS+=("🟡 $task: $(printf '%s' "$STATUS" | sed 's/auth_failed/ошибка авторизации/; s/billing_failed/ошибка баланса или квоты/; s/model_unavailable/недоступна запрошенная модель/; s/network_failed/сетевая ошибка API/; s/timed_out/превышен лимит времени/; s/preflight_failed/ошибка предварительной проверки/; s/failed/ошибка/; s/missing/нет статуса/; s/stale_lock/зависшая блокировка/') (${SUMMARY:-без описания})")
+            WARNINGS+=("🟡 $task: $(printf '%s' "$STATUS" | sed 's/auth_failed/ошибка авторизации/; s/billing_failed/ошибка баланса или квоты/; s/model_unavailable/недоступна запрошенная модель/; s/network_failed/сетевая ошибка API/; s/timed_out/превышен лимит времени/; s/preflight_failed/ошибка предварительной проверки/; s/stale/устаревший статус/; s/failed/ошибка/; s/missing/нет статуса/; s/stale_lock/зависшая блокировка/') (${SUMMARY:-без описания})")
             log "ВНИМАНИЕ: $task status=$STATUS summary=${SUMMARY:-no summary}"
             ;;
     esac
