@@ -90,6 +90,19 @@ status_file_for() {
     echo "$STATUS_DIR/${task}.status"
 }
 
+get_status_value() {
+    local key="$1"
+    local status_file="$2"
+    [ -f "$status_file" ] || return 0
+    awk -F= -v wanted="$key" '$1 == wanted {
+        value=$0
+        sub(/^[^=]+="/, "", value)
+        sub(/"$/, "", value)
+        print value
+        exit
+    }' "$status_file"
+}
+
 write_status() {
     local task="$1"
     local run_id="$2"
@@ -99,8 +112,27 @@ write_status() {
     local start_ts="$6"
     local end_ts="$7"
     local log_path="$8"
-    local status_file
+    local evidence_status="${9:-unknown}"
+    local evidence_summary="${10:-}"
+    local error_summary="${11:-}"
+    local staleness_budget_sec="${12:-$(default_staleness_budget_for "$task")}"
+    local produced_artifacts="${13:-}"
+    local status_file prev_last_success prev_last_failure last_success_at last_failure_at
     status_file=$(status_file_for "$task")
+
+    prev_last_success=$(get_status_value "LAST_SUCCESS_AT" "$status_file")
+    prev_last_failure=$(get_status_value "LAST_FAILURE_AT" "$status_file")
+    last_success_at="$prev_last_success"
+    last_failure_at="$prev_last_failure"
+
+    case "$status" in
+        success)
+            last_success_at="$end_ts"
+            ;;
+        auth_failed|billing_failed|model_unavailable|network_failed|timed_out|preflight_failed|failed|stale_lock)
+            last_failure_at="$end_ts"
+            ;;
+    esac
 
     cat > "$status_file" <<EOF
 TASK_NAME="$task"
@@ -110,6 +142,15 @@ EXIT_CODE="$exit_code"
 SUMMARY="$(escape_value "$summary")"
 START_TS="$start_ts"
 END_TS="$end_ts"
+LAST_STARTED_AT="$start_ts"
+LAST_FINISHED_AT="$end_ts"
+LAST_SUCCESS_AT="$last_success_at"
+LAST_FAILURE_AT="$last_failure_at"
+EVIDENCE_STATUS="$evidence_status"
+EVIDENCE_SUMMARY="$(escape_value "$evidence_summary")"
+ERROR_SUMMARY="$(escape_value "$error_summary")"
+STALENESS_BUDGET_SEC="$staleness_budget_sec"
+PRODUCED_ARTIFACTS="$(escape_value "$produced_artifacts")"
 LOG_PATH="$log_path"
 UPDATED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
 EOF
@@ -167,16 +208,95 @@ mark_task_state() {
     esac
 }
 
+default_staleness_budget_for() {
+    case "$1" in
+        extractor-inbox-check) echo 10800 ;;
+        strategist-week-review) echo 604800 ;;
+        strategist-note-review) echo 86400 ;;
+        strategist-morning|synchronizer-code-scan|synchronizer-daily-report) echo 86400 ;;
+        *) echo 43200 ;;
+    esac
+}
+
+collect_task_evidence() {
+    local task="$1"
+    local tmp_out="$2"
+    local evidence_status="weak"
+    local evidence_summary=""
+    local produced_artifacts=""
+
+    case "$task" in
+        strategist-morning)
+            if grep -Eq 'Completed scenario: (session-prep|day-plan)|Scenario result: (session-prep|day-plan) status=success' "$LOG_FILE"; then
+                evidence_status="verified"
+                evidence_summary="в логе подтверждён успешный сценарий открытия дня"
+            else
+                evidence_summary="нет подтверждения успешного сценария открытия дня в логе"
+            fi
+            ;;
+        strategist-note-review)
+            if grep -Eq 'Completed scenario: note-review|Scenario result: note-review status=success' "$LOG_FILE"; then
+                evidence_status="verified"
+                evidence_summary="в логе подтверждён успешный разбор заметок"
+            else
+                evidence_summary="нет подтверждения успешного note-review в логе"
+            fi
+            ;;
+        strategist-week-review)
+            if grep -Eq 'Completed scenario: week-review|Scenario result: week-review status=success' "$LOG_FILE"; then
+                evidence_status="verified"
+                evidence_summary="в логе подтверждён успешный weekly review"
+            else
+                evidence_summary="нет подтверждения weekly review в логе"
+            fi
+            ;;
+        synchronizer-code-scan)
+            if [ -s "$tmp_out" ]; then
+                evidence_status="verified"
+                evidence_summary="сканирование кода вернуло ненулевой вывод"
+            else
+                evidence_summary="сканирование завершилось без диагностического вывода"
+            fi
+            ;;
+        synchronizer-daily-report)
+            local report_file="$HOME/Github/DS-strategy/current/SchedulerReport $DATE.md"
+            local agents_file="$HOME/Github/DS-strategy/current/AGENTS-STATUS.md"
+            local open_file="$HOME/Github/DS-strategy/current/SESSION-OPEN (Экран открытия сессии).md"
+            if [ -s "$report_file" ] && [ -s "$agents_file" ] && [ -s "$open_file" ]; then
+                evidence_status="verified"
+                evidence_summary="созданы все артефакты daily-report"
+                produced_artifacts="current/SchedulerReport $DATE.md;current/AGENTS-STATUS.md;current/SESSION-OPEN (Экран открытия сессии).md"
+            else
+                evidence_summary="не все артефакты daily-report созданы"
+            fi
+            ;;
+        extractor-inbox-check)
+            if grep -Eq 'Inbox-Check|inbox-check|CO\.' "$tmp_out"; then
+                evidence_status="verified"
+                evidence_summary="экстрактор оставил следы обработки inbox"
+            else
+                evidence_summary="нет следов обработки inbox в выводе"
+            fi
+            ;;
+        *)
+            evidence_status="weak"
+            evidence_summary="для задачи не настроен evidence collector"
+            ;;
+    esac
+
+    printf '%s\n%s\n%s\n' "$evidence_status" "$evidence_summary" "$produced_artifacts"
+}
+
 run_task() {
     local task="$1"
     local state_kind="$2"
     shift 2
 
-    local start_ts end_ts tmp_out exit_code summary status
+    local start_ts end_ts tmp_out exit_code summary status evidence_status evidence_summary produced_artifacts error_summary
     start_ts="$(date '+%Y-%m-%d %H:%M:%S')"
     tmp_out=$(mktemp)
 
-    write_status "$task" "$RUN_ID" "running" "" "started by scheduler" "$start_ts" "" "$LOG_FILE"
+    write_status "$task" "$RUN_ID" "running" "" "started by scheduler" "$start_ts" "" "$LOG_FILE" "pending" "выполняется" "" "$(default_staleness_budget_for "$task")" ""
 
     set +e
     "$@" > "$tmp_out" 2>&1
@@ -188,17 +308,30 @@ run_task() {
     if [ "$exit_code" -eq 0 ]; then
         end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
         summary="completed successfully"
-        write_status "$task" "$RUN_ID" "success" "0" "$summary" "$start_ts" "$end_ts" "$LOG_FILE"
-        mark_task_state "$task" "$state_kind"
+        mapfile -t evidence_lines < <(collect_task_evidence "$task" "$tmp_out")
+        evidence_status="${evidence_lines[0]:-weak}"
+        evidence_summary="${evidence_lines[1]:-нет подтверждённого evidence}"
+        produced_artifacts="${evidence_lines[2]:-}"
+
+        if [ "$evidence_status" = "verified" ]; then
+            write_status "$task" "$RUN_ID" "success" "0" "$summary" "$start_ts" "$end_ts" "$LOG_FILE" "$evidence_status" "$evidence_summary" "" "$(default_staleness_budget_for "$task")" "$produced_artifacts"
+            mark_task_state "$task" "$state_kind"
+            rm -f "$tmp_out"
+            return 0
+        fi
+
+        error_summary="exit code 0 without operational evidence"
+        write_status "$task" "$RUN_ID" "failed" "65" "task completed without evidence" "$start_ts" "$end_ts" "$LOG_FILE" "$evidence_status" "$evidence_summary" "$error_summary" "$(default_staleness_budget_for "$task")" "$produced_artifacts"
         rm -f "$tmp_out"
-        return 0
+        return 65
     fi
 
     status=$(classify_failure "$tmp_out")
     summary=$(tail -20 "$tmp_out" | tr '\n' ' ' | sed 's/  */ /g')
     [ -n "$summary" ] || summary="task failed"
     end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
-    write_status "$task" "$RUN_ID" "$status" "$exit_code" "$summary" "$start_ts" "$end_ts" "$LOG_FILE"
+    error_summary="$summary"
+    write_status "$task" "$RUN_ID" "$status" "$exit_code" "$summary" "$start_ts" "$end_ts" "$LOG_FILE" "failed" "операционное evidence не подтверждено" "$error_summary" "$(default_staleness_budget_for "$task")" ""
     rm -f "$tmp_out"
     return "$exit_code"
 }

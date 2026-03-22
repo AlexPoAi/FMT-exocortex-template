@@ -61,7 +61,9 @@ timestamp_to_epoch() {
 }
 
 task_reference_ts() {
-    if [ -n "${END_TS:-}" ]; then
+    if [ -n "${LAST_FINISHED_AT:-}" ]; then
+        echo "$LAST_FINISHED_AT"
+    elif [ -n "${END_TS:-}" ]; then
         echo "$END_TS"
     else
         echo "${UPDATED_AT:-}"
@@ -127,6 +129,15 @@ load_status() {
     SUMMARY="status artifact missing"
     START_TS=""
     END_TS=""
+    LAST_STARTED_AT=""
+    LAST_FINISHED_AT=""
+    LAST_SUCCESS_AT=""
+    LAST_FAILURE_AT=""
+    EVIDENCE_STATUS="unknown"
+    EVIDENCE_SUMMARY=""
+    ERROR_SUMMARY=""
+    STALENESS_BUDGET_SEC="$(default_staleness_budget_for "$task")"
+    PRODUCED_ARTIFACTS=""
     LOG_PATH="$SCHEDULER_LOG"
     UPDATED_AT=""
 
@@ -136,11 +147,19 @@ load_status() {
         STATUS="success"
         UPDATED_AT="$DATE $(cat "$STATE_DIR/${task}-$DATE")"
         END_TS="$UPDATED_AT"
+        LAST_FINISHED_AT="$UPDATED_AT"
+        LAST_SUCCESS_AT="$UPDATED_AT"
+        EVIDENCE_STATUS="legacy"
+        EVIDENCE_SUMMARY="derived from legacy daily marker"
         SUMMARY="derived from legacy daily marker"
     elif [ "$task" = "extractor-inbox-check" ] && [ -f "$STATE_DIR/${task}-last" ]; then
         STATUS="success"
         UPDATED_AT="$(format_epoch "$(cat "$STATE_DIR/${task}-last")")"
         END_TS="$UPDATED_AT"
+        LAST_FINISHED_AT="$UPDATED_AT"
+        LAST_SUCCESS_AT="$UPDATED_AT"
+        EVIDENCE_STATUS="legacy"
+        EVIDENCE_SUMMARY="derived from legacy interval marker"
         SUMMARY="derived from legacy interval marker"
     fi
 
@@ -151,9 +170,80 @@ load_status() {
         EXIT_CODE=""
         SUMMARY="status artifact from previous window"
     fi
+
+    if [ "$STATUS" = "success" ] && [ "${EVIDENCE_STATUS:-unknown}" != "verified" ] && [ "${EVIDENCE_STATUS:-unknown}" != "legacy" ]; then
+        STATUS="failed"
+        EXIT_CODE="65"
+        ERROR_SUMMARY="success without verified operational evidence"
+        SUMMARY="success without verified operational evidence"
+    fi
 }
 
-render_status_badge() {
+default_staleness_budget_for() {
+    case "$1" in
+        extractor-inbox-check) echo 10800 ;;
+        strategist-week-review) echo 604800 ;;
+        strategist-note-review) echo 86400 ;;
+        strategist-morning|synchronizer-code-scan|synchronizer-daily-report) echo 86400 ;;
+        *) echo 43200 ;;
+    esac
+}
+
+render_evidence_label() {
+    case "$1" in
+        verified) echo "подтверждено" ;;
+        legacy) echo "legacy-маркер" ;;
+        pending) echo "в процессе" ;;
+        failed) echo "не подтверждено" ;;
+        weak) echo "слабое подтверждение" ;;
+        *) echo "нет evidence" ;;
+    esac
+}
+
+render_verdict_badge() {
+    case "$1" in
+        green) echo "🟢" ;;
+        yellow) echo "🟡" ;;
+        red) echo "🔴" ;;
+        *) echo "⚪" ;;
+    esac
+}
+
+check_file_freshness() {
+    local path="$1"
+    local budget="$2"
+    [ -f "$path" ] || return 1
+    local ts=0 age=999999999
+    ts=$(stat -f %m "$path" 2>/dev/null || stat -c %Y "$path" 2>/dev/null || echo 0)
+    [ "$ts" -gt 0 ] || return 1
+    age=$(( NOW_EPOCH - ts ))
+    [ "$age" -le "$budget" ]
+}
+
+status_to_verdict() {
+    case "$1" in
+        success|skipped) echo "green" ;;
+        running|stale) echo "yellow" ;;
+        missing|auth_failed|billing_failed|model_unavailable|network_failed|timed_out|preflight_failed|failed|stale_lock) echo "red" ;;
+        *) echo "yellow" ;;
+    esac
+}
+
+component_line() {
+    local label="$1"
+    local state="$2"
+    printf -- '- %s: **%s %s**\n' "$label" "$(render_verdict_badge "$state")" "$state"
+}
+
+build_evidence_problem_card() {
+    local title="$1"
+    local problem="$2"
+    local evidence="$3"
+    local impact="$4"
+    local action="$5"
+    printf '### %s\n- Проблема: %s\n- Доказательство: %s\n- Влияние: %s\n- Действие: %s\n\n' "$title" "$problem" "$evidence" "$impact" "$action"
+}
+
     case "$1" in
         success) echo "✅" ;;
         skipped) echo "⏭️" ;;
@@ -263,28 +353,33 @@ format_epoch() {
 }
 
 probe_environment() {
-    SCHEDULER_STATE="not_loaded"
-    HEALTH_STATE="not_loaded"
-    AUTH_STATE="broken"
-    STATUS_ARTIFACTS_STATE="missing"
+    SCHEDULER_STATE="red"
+    HEALTH_STATE="red"
+    AUTH_STATE="red"
+    STATUS_ARTIFACTS_STATE="red"
     STATUS_ARTIFACTS_UPDATED_AT="—"
     STATUS_ARTIFACTS_AGE=""
-    CREATIVE_CONVEYOR_STATE="broken"
-    DRIVE_SYNC_STATE="broken"
-    SESSION_WATCHER_STATE="not_loaded"
-    RUNTIME_SCRIPTS_STATE="broken"
-    SECRETS_LAYER_STATE="broken"
+    CREATIVE_CONVEYOR_STATE="red"
+    DRIVE_SYNC_STATE="red"
+    SESSION_WATCHER_STATE="red"
+    CHAIN_REPORT_STATE="red"
+    GOOGLE_DRIVE_STATE="red"
+    STRATEGIST_OPERABILITY_STATE="red"
+    EXTRACTOR_OPERABILITY_STATE="red"
+    MANAGER_COLLECTION_STATE="yellow"
+    RUNTIME_SCRIPTS_STATE="red"
+    SECRETS_LAYER_STATE="red"
 
     if launchctl list | grep -q 'com.exocortex.scheduler'; then
-        SCHEDULER_STATE="loaded"
+        SCHEDULER_STATE="green"
     fi
 
     if launchctl list | grep -q 'com.exocortex.health-check'; then
-        HEALTH_STATE="loaded"
+        HEALTH_STATE="green"
     fi
 
     if [ -x "$HOME/.config/aist/anthropic_auth_helper.sh" ] && "$HOME/.config/aist/anthropic_auth_helper.sh" >/dev/null 2>&1; then
-        AUTH_STATE="ok"
+        AUTH_STATE="green"
     fi
 
     local latest_status_ts
@@ -293,36 +388,62 @@ probe_environment() {
     if [ "$latest_status_ts" -gt 0 ]; then
         STATUS_ARTIFACTS_AGE=$(( NOW_EPOCH - latest_status_ts ))
         if [ "$STATUS_ARTIFACTS_AGE" -gt 43200 ]; then
-            STATUS_ARTIFACTS_STATE="stale"
+            STATUS_ARTIFACTS_STATE="yellow"
         else
-            STATUS_ARTIFACTS_STATE="fresh"
+            STATUS_ARTIFACTS_STATE="green"
         fi
     fi
 
-    if [ -d "$HOME/Github/creativ-convector/.git" ]; then
-        CREATIVE_CONVEYOR_STATE="ok"
+    if [ -d "$HOME/Github/creativ-convector/.git" ] && check_file_freshness "$HOME/Library/Logs/sync_obsidian.log" 21600; then
+        CREATIVE_CONVEYOR_STATE="green"
+    elif [ -d "$HOME/Github/creativ-convector/.git" ]; then
+        CREATIVE_CONVEYOR_STATE="yellow"
     fi
 
-    if [ -x "$HOME/Github/creativ-convector/.github/scripts/sync_obsidian.sh" ] && [ -d "$HOME/Documents/creativ-convector.nocloud" ]; then
-        DRIVE_SYNC_STATE="ok"
-    elif [ -x "$HOME/Github/creativ-convector/.github/scripts/sync_obsidian.sh" ] || [ -d "$HOME/Documents/creativ-convector.nocloud" ]; then
-        DRIVE_SYNC_STATE="warning"
+    if [ -x "$HOME/Github/creativ-convector/.github/scripts/sync_obsidian.sh" ] && [ -d "$HOME/Documents/creativ-convector.nocloud" ] && check_file_freshness "$HOME/Library/Logs/sync_obsidian.log" 21600; then
+        DRIVE_SYNC_STATE="green"
+    elif [ -x "$HOME/Github/creativ-convector/.github/scripts/sync_obsidian.sh" ] && [ -d "$HOME/Documents/creativ-convector.nocloud" ]; then
+        DRIVE_SYNC_STATE="yellow"
     fi
 
     if launchctl list | grep -q 'com.extractor.session-watcher'; then
-        SESSION_WATCHER_STATE="loaded"
+        SESSION_WATCHER_STATE="green"
+    elif [ -x "$HOME/Github/FMT-exocortex-template/roles/extractor/scripts/session-watcher.sh" ]; then
+        SESSION_WATCHER_STATE="yellow"
+    fi
+
+    if check_file_freshness "$HOME/Github/DS-strategy/inbox/extraction-reports/$(date +%Y-%m-%d)-chain-report.md" 86400; then
+        CHAIN_REPORT_STATE="green"
+    elif ls "$HOME/Github/DS-strategy/inbox/extraction-reports/"*.md >/dev/null 2>&1; then
+        CHAIN_REPORT_STATE="yellow"
+    fi
+
+    if [ -f "$HOME/Github/VK-offee/knowledge-base/sync-reports/sync-$DATE.md" ]; then
+        GOOGLE_DRIVE_STATE="green"
+    elif ls "$HOME/Github/VK-offee/knowledge-base/sync-reports/"sync-*.md >/dev/null 2>&1; then
+        GOOGLE_DRIVE_STATE="yellow"
+    fi
+
+    load_status "strategist-morning"
+    STRATEGIST_OPERABILITY_STATE=$(status_to_verdict "$STATUS")
+
+    load_status "extractor-inbox-check"
+    EXTRACTOR_OPERABILITY_STATE=$(status_to_verdict "$STATUS")
+
+    if [ -f "$HOME/Github/DS-strategy/inbox/captures.md" ]; then
+        MANAGER_COLLECTION_STATE="green"
     fi
 
     if [ -x "$SCRIPT_DIR/health-check.sh" ] && [ -x "$SCRIPT_DIR/scheduler.sh" ] && [ -x "$HOME/.config/aist/anthropic_auth_helper.sh" ]; then
-        RUNTIME_SCRIPTS_STATE="ok"
+        RUNTIME_SCRIPTS_STATE="green"
     elif [ -x "$SCRIPT_DIR/health-check.sh" ] || [ -x "$SCRIPT_DIR/scheduler.sh" ] || [ -x "$HOME/.config/aist/anthropic_auth_helper.sh" ]; then
-        RUNTIME_SCRIPTS_STATE="warning"
+        RUNTIME_SCRIPTS_STATE="yellow"
     fi
 
     if [ -f "$HOME/.config/aist/env" ] && [ -x "$HOME/.config/aist/anthropic_auth_helper.sh" ]; then
-        SECRETS_LAYER_STATE="ok"
+        SECRETS_LAYER_STATE="green"
     elif [ -f "$HOME/.config/aist/env" ] || [ -x "$HOME/.config/aist/anthropic_auth_helper.sh" ]; then
-        SECRETS_LAYER_STATE="warning"
+        SECRETS_LAYER_STATE="yellow"
     fi
 }
 
@@ -348,12 +469,12 @@ build_problem_cards() {
             success|skipped|running)
                 ;;
             *)
-                output+="### $(task_title "$task")\n"
-                output+="- Статус: $(render_status_label "$STATUS")\n"
-                output+="- Обновлено: ${UPDATED_AT:-—}\n"
-                output+="- Код выхода: ${EXIT_CODE:-—}\n"
-                output+="- Причина: ${SUMMARY:-—}\n"
-                output+="- Лог: ${LOG_PATH:-—}\n\n"
+                output+="$(build_evidence_problem_card \
+                    "$(task_title "$task")" \
+                    "$(render_status_label "$STATUS")" \
+                    "evidence=$(render_evidence_label "${EVIDENCE_STATUS:-unknown}"), summary=${EVIDENCE_SUMMARY:-${SUMMARY:-—}}, updated=${UPDATED_AT:-—}" \
+                    "задача не может считаться truthful green" \
+                    "проверить ${LOG_PATH:-лог} и восстановить operational evidence")"
                 ;;
         esac
     done
@@ -363,46 +484,19 @@ build_problem_cards() {
 build_environment_cards() {
     local output=""
 
-    if [ "$SCHEDULER_STATE" != "loaded" ]; then
-        output+="### Планировщик экзокортекса\n"
-        output+="- Статус: не загружен\n"
-        output+="- Действие: проверить com.exocortex.scheduler через launchctl\n\n"
-    fi
+    [ "$SCHEDULER_STATE" = "green" ] || output+="$(build_evidence_problem_card "Планировщик экзокортекса" "не подтверждена готовность" "launchctl verdict=$SCHEDULER_STATE" "утренний runtime не гарантирован" "проверить com.exocortex.scheduler через launchctl")"
+    [ "$HEALTH_STATE" = "green" ] || output+="$(build_evidence_problem_card "Проверка среды" "не подтверждена" "launchctl verdict=$HEALTH_STATE" "деградации среды могут остаться незамеченными" "проверить com.exocortex.health-check")"
+    [ "$AUTH_STATE" = "green" ] || output+="$(build_evidence_problem_card "Помощник авторизации" "helper/env слой не подтверждён" "anthropic_auth_helper verdict=$AUTH_STATE" "агенты не смогут честно выполнять сценарии" "проверить ~/.config/aist/env и anthropic_auth_helper.sh")"
 
-    if [ "$HEALTH_STATE" != "loaded" ]; then
-        output+="### Проверка среды\n"
-        output+="- Статус: не загружена\n"
-        output+="- Действие: проверить com.exocortex.health-check через launchctl\n\n"
-    fi
+    case "$STATUS_ARTIFACTS_STATE" in
+        red) output+="$(build_evidence_problem_card "Статус-артефакты" "отсутствуют" "нет свежих *.status" "утренний экран не имеет источника истины" "запустить scheduler или daily-report")" ;;
+        yellow) output+="$(build_evidence_problem_card "Статус-артефакты" "устарели" "последнее обновление: ${STATUS_ARTIFACTS_UPDATED_AT:-—}" "green не может считаться доказанным" "обновить снимок среды")" ;;
+    esac
 
-    if [ "$AUTH_STATE" != "ok" ]; then
-        output+="### Помощник авторизации\n"
-        output+="- Статус: ошибка\n"
-        output+="- Действие: проверить ~/.config/aist/env и anthropic_auth_helper.sh\n\n"
-    fi
-
-    if [ "$STATUS_ARTIFACTS_STATE" = "missing" ]; then
-        output+="### Статус-артефакты\n"
-        output+="- Статус: отсутствуют\n"
-        output+="- Действие: запустить scheduler или daily-report для восстановления снимка среды\n\n"
-    elif [ "$STATUS_ARTIFACTS_STATE" = "stale" ]; then
-        output+="### Статус-артефакты\n"
-        output+="- Статус: устарели\n"
-        output+="- Последнее обновление: ${STATUS_ARTIFACTS_UPDATED_AT:-—}\n"
-        output+="- Действие: обновить снимок среды перед открытием дня\n\n"
-    fi
-
-    if [ "$DRIVE_SYNC_STATE" != "ok" ]; then
-        output+="### Связка накопитель ↔ Obsidian\n"
-        output+="- Статус: $(component_label "$DRIVE_SYNC_STATE")\n"
-        output+="- Действие: проверить зеркало ~/Documents/creativ-convector.nocloud и sync_obsidian.sh\n\n"
-    fi
-
-    if [ "$SESSION_WATCHER_STATE" != "loaded" ]; then
-        output+="### Наблюдатель импортов сессий\n"
-        output+="- Статус: не загружен\n"
-        output+="- Действие: проверить com.extractor.session-watcher\n\n"
-    fi
+    [ "$DRIVE_SYNC_STATE" = "green" ] || output+="$(build_evidence_problem_card "Связка накопитель ↔ Obsidian" "контур не подтверждён" "sync_obsidian.log verdict=$DRIVE_SYNC_STATE" "сбор заметок может быть неполным" "проверить зеркало ~/Documents/creativ-convector.nocloud и sync_obsidian.sh")"
+    [ "$SESSION_WATCHER_STATE" = "green" ] || output+="$(build_evidence_problem_card "Наблюдатель импортов сессий" "контур не подтверждён" "session-watcher verdict=$SESSION_WATCHER_STATE" "pending-sessions могут зависнуть" "проверить com.extractor.session-watcher")"
+    [ "$CHAIN_REPORT_STATE" = "green" ] || output+="$(build_evidence_problem_card "Chain-report экстрактора" "нет свежего отчёта цепочки" "chain-report verdict=$CHAIN_REPORT_STATE" "невозможно доказать проход от сессии к captures/PACK" "проверить extraction-reports и session-import цепочку")"
+    [ "$GOOGLE_DRIVE_STATE" = "green" ] || output+="$(build_evidence_problem_card "Google Drive sync" "нет свежего отчёта синхронизации" "sync report verdict=$GOOGLE_DRIVE_STATE" "внешние документы могли не попасть в Pack" "проверить sync_google_drive_v2.py и knowledge-base/sync-reports")"
 
     printf '%b' "$output"
 }
@@ -416,7 +510,7 @@ evaluate_brain_state() {
     BRAIN_LABEL="готов к работе"
     OPENING_MODE="Обычное открытие дня разрешено."
 
-    if [ "$AUTH_STATE" != "ok" ] || [ "$SCHEDULER_STATE" != "loaded" ] || [ "$STATUS_ARTIFACTS_STATE" = "missing" ]; then
+    if [ "$AUTH_STATE" != "green" ] || [ "$SCHEDULER_STATE" != "green" ] || [ "$STATUS_ARTIFACTS_STATE" = "red" ] || [ "$STRATEGIST_OPERABILITY_STATE" = "red" ]; then
         BRAIN_STATE="red"
         BRAIN_BADGE="🔴"
         BRAIN_LABEL="обычное открытие заблокировано"
@@ -424,7 +518,7 @@ evaluate_brain_state() {
         return
     fi
 
-    if [ "$HEALTH_STATE" != "loaded" ] || [ "$STATUS_ARTIFACTS_STATE" = "stale" ] || [ -n "$failed_cards" ] || [ -n "$env_cards" ]; then
+    if [ "$HEALTH_STATE" != "green" ] || [ "$STATUS_ARTIFACTS_STATE" = "yellow" ] || [ -n "$failed_cards" ] || [ -n "$env_cards" ] || [ "$EXTRACTOR_OPERABILITY_STATE" != "green" ] || [ "$DRIVE_SYNC_STATE" != "green" ] || [ "$GOOGLE_DRIVE_STATE" != "green" ]; then
         BRAIN_STATE="yellow"
         BRAIN_BADGE="🟡"
         BRAIN_LABEL="требует внимания"
