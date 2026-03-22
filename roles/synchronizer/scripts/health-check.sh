@@ -6,6 +6,9 @@ set -euo pipefail
 LOG_DIR="$HOME/logs/health-check"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 DATE=$(date '+%Y-%m-%d')
+HOUR=$(date +%H)
+DOW=$(date +%u)
+NOW_EPOCH=$(date +%s)
 LOG_FILE="$LOG_DIR/$DATE.log"
 ENV_FILE="$HOME/.config/aist/env"
 STATE_DIR="$HOME/.local/state/exocortex"
@@ -40,6 +43,81 @@ notify_telegram() {
     fi
 }
 
+format_epoch() {
+    local ts="$1"
+    if [ -z "$ts" ] || [ "$ts" -le 0 ]; then
+        echo ""
+        return
+    fi
+    date -r "$ts" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -d "@$ts" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo ""
+}
+
+timestamp_to_epoch() {
+    local ts="$1"
+    [ -n "$ts" ] || {
+        echo 0
+        return
+    }
+    date -j -f '%Y-%m-%d %H:%M:%S' "$ts" '+%s' 2>/dev/null || date -d "$ts" '+%s' 2>/dev/null || echo 0
+}
+
+task_reference_ts() {
+    if [ -n "${END_TS:-}" ]; then
+        echo "$END_TS"
+    else
+        echo "${UPDATED_AT:-}"
+    fi
+}
+
+task_status_is_current() {
+    local task="$1"
+    local ref_ts="$2"
+    local ref_date ref_epoch age
+
+    ref_date=$(printf '%s' "$ref_ts" | cut -d' ' -f1)
+
+    case "$task" in
+        extractor-inbox-check)
+            if ! (( 10#$HOUR >= 7 && 10#$HOUR <= 23 )); then
+                [ "$ref_date" = "$DATE" ]
+                return
+            fi
+            ref_epoch=$(timestamp_to_epoch "$ref_ts")
+            [ "$ref_epoch" -gt 0 ] || return 1
+            age=$(( NOW_EPOCH - ref_epoch ))
+            [ "$age" -lt 10800 ]
+            ;;
+        *)
+            [ "$ref_date" = "$DATE" ]
+            ;;
+    esac
+}
+
+task_missing_is_expected() {
+    local task="$1"
+
+    case "$task" in
+        strategist-morning)
+            [ "$HOUR" -lt 4 ]
+            ;;
+        strategist-note-review)
+            [ "$HOUR" -lt 22 ]
+            ;;
+        strategist-week-review)
+            [ "$DOW" -ne 1 ]
+            ;;
+        synchronizer-daily-report)
+            [ "$HOUR" -lt 6 ] && [ ! -f "$STATE_DIR/strategist-morning-$DATE" ]
+            ;;
+        extractor-inbox-check)
+            ! (( 10#$HOUR >= 7 && 10#$HOUR <= 23 ))
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -55,12 +133,22 @@ load_status() {
         . "$file"
     elif [ -f "$STATE_DIR/${task}-$DATE" ]; then
         STATUS="success"
-        UPDATED_AT="$(cat "$STATE_DIR/${task}-$DATE")"
+        UPDATED_AT="$DATE $(cat "$STATE_DIR/${task}-$DATE")"
         SUMMARY="derived from legacy daily marker"
     elif [ "$task" = "extractor-inbox-check" ] && [ -f "$STATE_DIR/${task}-last" ]; then
         STATUS="success"
-        UPDATED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+        UPDATED_AT="$(format_epoch "$(cat "$STATE_DIR/${task}-last")")"
         SUMMARY="derived from legacy interval marker"
+    fi
+
+    local ref_ts
+    ref_ts=$(task_reference_ts)
+    if [ "$STATUS" != "missing" ] && ! task_status_is_current "$task" "$ref_ts"; then
+        STATUS="missing"
+        EXIT_CODE=""
+        SUMMARY="status artifact from previous window"
+        UPDATED_AT=""
+        LOG_PATH=""
     fi
 }
 
@@ -92,11 +180,14 @@ fi
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
     load_status "$task"
-    case "$task:$STATUS" in
-        strategist-note-review:missing|strategist-week-review:missing)
-            log "НЕТ СТАТУСА: $task ещё не должен был запускаться в текущем окне"
-            ;;
-        *:success|*:skipped|*:running)
+
+    if [ "$STATUS" = "missing" ] && task_missing_is_expected "$task"; then
+        log "НЕТ СТАТУСА: $task ещё не должен был запускаться в текущем окне"
+        continue
+    fi
+
+    case "$STATUS" in
+        success|skipped|running)
             log "ОК: $task status=$STATUS"
             ;;
         *)
