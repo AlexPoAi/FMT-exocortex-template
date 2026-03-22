@@ -244,6 +244,7 @@ build_evidence_problem_card() {
     printf '### %s\n- Проблема: %s\n- Доказательство: %s\n- Влияние: %s\n- Действие: %s\n\n' "$title" "$problem" "$evidence" "$impact" "$action"
 }
 
+render_status_badge() {
     case "$1" in
         success) echo "✅" ;;
         skipped) echo "⏭️" ;;
@@ -474,7 +475,7 @@ build_problem_cards() {
                     "$(render_status_label "$STATUS")" \
                     "evidence=$(render_evidence_label "${EVIDENCE_STATUS:-unknown}"), summary=${EVIDENCE_SUMMARY:-${SUMMARY:-—}}, updated=${UPDATED_AT:-—}" \
                     "задача не может считаться truthful green" \
-                    "проверить ${LOG_PATH:-лог} и восстановить operational evidence")"
+                    "проверить ${LOG_PATH:-лог} и восстановить operational evidence")\n"
                 ;;
         esac
     done
@@ -484,19 +485,19 @@ build_problem_cards() {
 build_environment_cards() {
     local output=""
 
-    [ "$SCHEDULER_STATE" = "green" ] || output+="$(build_evidence_problem_card "Планировщик экзокортекса" "не подтверждена готовность" "launchctl verdict=$SCHEDULER_STATE" "утренний runtime не гарантирован" "проверить com.exocortex.scheduler через launchctl")"
-    [ "$HEALTH_STATE" = "green" ] || output+="$(build_evidence_problem_card "Проверка среды" "не подтверждена" "launchctl verdict=$HEALTH_STATE" "деградации среды могут остаться незамеченными" "проверить com.exocortex.health-check")"
-    [ "$AUTH_STATE" = "green" ] || output+="$(build_evidence_problem_card "Помощник авторизации" "helper/env слой не подтверждён" "anthropic_auth_helper verdict=$AUTH_STATE" "агенты не смогут честно выполнять сценарии" "проверить ~/.config/aist/env и anthropic_auth_helper.sh")"
+    [ "$SCHEDULER_STATE" = "green" ] || output+="$(build_evidence_problem_card "Планировщик экзокортекса" "не подтверждена готовность" "launchctl verdict=$SCHEDULER_STATE" "утренний runtime не гарантирован" "проверить com.exocortex.scheduler через launchctl")\n\n"
+    [ "$HEALTH_STATE" = "green" ] || output+="$(build_evidence_problem_card "Проверка среды" "не подтверждена" "launchctl verdict=$HEALTH_STATE" "деградации среды могут остаться незамеченными" "проверить com.exocortex.health-check")\n\n"
+    [ "$AUTH_STATE" = "green" ] || output+="$(build_evidence_problem_card "Помощник авторизации" "helper/env слой не подтверждён" "anthropic_auth_helper verdict=$AUTH_STATE" "агенты не смогут честно выполнять сценарии" "проверить ~/.config/aist/env и anthropic_auth_helper.sh")\n\n"
 
     case "$STATUS_ARTIFACTS_STATE" in
-        red) output+="$(build_evidence_problem_card "Статус-артефакты" "отсутствуют" "нет свежих *.status" "утренний экран не имеет источника истины" "запустить scheduler или daily-report")" ;;
-        yellow) output+="$(build_evidence_problem_card "Статус-артефакты" "устарели" "последнее обновление: ${STATUS_ARTIFACTS_UPDATED_AT:-—}" "green не может считаться доказанным" "обновить снимок среды")" ;;
+        red) output+="$(build_evidence_problem_card "Статус-артефакты" "отсутствуют" "нет свежих *.status" "утренний экран не имеет источника истины" "запустить scheduler или daily-report")\n\n" ;;
+        yellow) output+="$(build_evidence_problem_card "Статус-артефакты" "устарели" "последнее обновление: ${STATUS_ARTIFACTS_UPDATED_AT:-—}" "green не может считаться доказанным" "обновить снимок среды")\n\n" ;;
     esac
 
-    [ "$DRIVE_SYNC_STATE" = "green" ] || output+="$(build_evidence_problem_card "Связка накопитель ↔ Obsidian" "контур не подтверждён" "sync_obsidian.log verdict=$DRIVE_SYNC_STATE" "сбор заметок может быть неполным" "проверить зеркало ~/Documents/creativ-convector.nocloud и sync_obsidian.sh")"
-    [ "$SESSION_WATCHER_STATE" = "green" ] || output+="$(build_evidence_problem_card "Наблюдатель импортов сессий" "контур не подтверждён" "session-watcher verdict=$SESSION_WATCHER_STATE" "pending-sessions могут зависнуть" "проверить com.extractor.session-watcher")"
-    [ "$CHAIN_REPORT_STATE" = "green" ] || output+="$(build_evidence_problem_card "Chain-report экстрактора" "нет свежего отчёта цепочки" "chain-report verdict=$CHAIN_REPORT_STATE" "невозможно доказать проход от сессии к captures/PACK" "проверить extraction-reports и session-import цепочку")"
-    [ "$GOOGLE_DRIVE_STATE" = "green" ] || output+="$(build_evidence_problem_card "Google Drive sync" "нет свежего отчёта синхронизации" "sync report verdict=$GOOGLE_DRIVE_STATE" "внешние документы могли не попасть в Pack" "проверить sync_google_drive_v2.py и knowledge-base/sync-reports")"
+    [ "$DRIVE_SYNC_STATE" = "green" ] || output+="$(build_evidence_problem_card "Связка накопитель ↔ Obsidian" "контур не подтверждён" "sync_obsidian.log verdict=$DRIVE_SYNC_STATE" "сбор заметок может быть неполным" "проверить зеркало ~/Documents/creativ-convector.nocloud и sync_obsidian.sh")\n\n"
+    [ "$SESSION_WATCHER_STATE" = "green" ] || output+="$(build_evidence_problem_card "Наблюдатель импортов сессий" "контур не подтверждён" "session-watcher verdict=$SESSION_WATCHER_STATE" "pending-sessions могут зависнуть" "проверить com.extractor.session-watcher")\n\n"
+    [ "$CHAIN_REPORT_STATE" = "green" ] || output+="$(build_evidence_problem_card "Chain-report экстрактора" "нет свежего отчёта цепочки" "chain-report verdict=$CHAIN_REPORT_STATE" "невозможно доказать проход от сессии к captures/PACK" "проверить extraction-reports и session-import цепочку")\n\n"
+    [ "$GOOGLE_DRIVE_STATE" = "green" ] || output+="$(build_evidence_problem_card "Google Drive sync" "нет свежего отчёта синхронизации" "sync report verdict=$GOOGLE_DRIVE_STATE" "внешние документы могли не попасть в Pack" "проверить sync_google_drive_v2.py и knowledge-base/sync-reports")\n\n"
 
     printf '%b' "$output"
 }
@@ -537,10 +538,12 @@ build_agents_status() {
 # Статус агентов
 
 - Мозг экзокортекса: **$BRAIN_BADGE $BRAIN_LABEL**
-- Планировщик: **$(component_badge "$SCHEDULER_STATE") $(component_label "$SCHEDULER_STATE")**
-- Проверка среды: **$(component_badge "$HEALTH_STATE") $(component_label "$HEALTH_STATE")**
-- Помощник авторизации: **$(component_badge "$AUTH_STATE") $(component_label "$AUTH_STATE")**
-- Статус-артефакты: **$(component_badge "$STATUS_ARTIFACTS_STATE") $(component_label "$STATUS_ARTIFACTS_STATE")**
+- Планировщик: **$(render_verdict_badge "$SCHEDULER_STATE") $SCHEDULER_STATE**
+- Проверка среды: **$(render_verdict_badge "$HEALTH_STATE") $HEALTH_STATE**
+- Помощник авторизации: **$(render_verdict_badge "$AUTH_STATE") $AUTH_STATE**
+- Статус-артефакты: **$(render_verdict_badge "$STATUS_ARTIFACTS_STATE") $STATUS_ARTIFACTS_STATE**
+- Стратег: **$(render_verdict_badge "$STRATEGIST_OPERABILITY_STATE") $STRATEGIST_OPERABILITY_STATE**
+- Экстрактор: **$(render_verdict_badge "$EXTRACTOR_OPERABILITY_STATE") $EXTRACTOR_OPERABILITY_STATE**
 - Обновлено: **$TIME_NOW**
 
 ## Задачи
@@ -567,23 +570,36 @@ build_session_open_screen() {
 ## $BRAIN_BADGE Мозг экзокортекса — $BRAIN_LABEL
 
 - Режим открытия: **$OPENING_MODE**
+- Итоговый verdict: **$(render_verdict_badge "$BRAIN_STATE") $BRAIN_STATE**
 - Время проверки: **$TIME_NOW**
 - Последнее обновление статус-артефактов: **$STATUS_ARTIFACTS_UPDATED_AT**
 
+## Порядок допуска к открытию дня
+
+$(component_line "1. Базовая инфраструктура" "$SCHEDULER_STATE")
+$(component_line "2. Мозг / health-check / status-store" "$STATUS_ARTIFACTS_STATE")
+$(component_line "3. Strategist" "$STRATEGIST_OPERABILITY_STATE")
+$(component_line "4. Extractor" "$EXTRACTOR_OPERABILITY_STATE")
+$(component_line "5. Creative conveyor" "$CREATIVE_CONVEYOR_STATE")
+$(component_line "6. External syncs / Google Drive" "$GOOGLE_DRIVE_STATE")
+$(component_line "7. Manager / other agents collection" "$MANAGER_COLLECTION_STATE")
+
 ## Приборная панель среды
 
-- Планировщик: **$(component_badge "$SCHEDULER_STATE") $(component_label "$SCHEDULER_STATE")**
-- Проверка среды: **$(component_badge "$HEALTH_STATE") $(component_label "$HEALTH_STATE")**
-- Помощник авторизации: **$(component_badge "$AUTH_STATE") $(component_label "$AUTH_STATE")**
-- Статус-артефакты: **$(component_badge "$STATUS_ARTIFACTS_STATE") $(component_label "$STATUS_ARTIFACTS_STATE")**
+- Планировщик: **$(render_verdict_badge "$SCHEDULER_STATE") $SCHEDULER_STATE**
+- Проверка среды: **$(render_verdict_badge "$HEALTH_STATE") $HEALTH_STATE**
+- Помощник авторизации: **$(render_verdict_badge "$AUTH_STATE") $AUTH_STATE**
+- Статус-артефакты: **$(render_verdict_badge "$STATUS_ARTIFACTS_STATE") $STATUS_ARTIFACTS_STATE**
 
 ## Критические связки среды
 
-- Творческий конвейер: **$(component_badge "$CREATIVE_CONVEYOR_STATE") $(component_label "$CREATIVE_CONVEYOR_STATE")**
-- Накопитель ↔ Obsidian: **$(component_badge "$DRIVE_SYNC_STATE") $(component_label "$DRIVE_SYNC_STATE")**
-- Импорт сессий экстрактора: **$(component_badge "$SESSION_WATCHER_STATE") $(component_label "$SESSION_WATCHER_STATE")**
-- Ключевые runtime-скрипты: **$(component_badge "$RUNTIME_SCRIPTS_STATE") $(component_label "$RUNTIME_SCRIPTS_STATE")**
-- Секреты и helper-слой: **$(component_badge "$SECRETS_LAYER_STATE") $(component_label "$SECRETS_LAYER_STATE")**
+- Творческий конвейер: **$(render_verdict_badge "$CREATIVE_CONVEYOR_STATE") $CREATIVE_CONVEYOR_STATE**
+- Накопитель ↔ Obsidian: **$(render_verdict_badge "$DRIVE_SYNC_STATE") $DRIVE_SYNC_STATE**
+- Импорт сессий экстрактора: **$(render_verdict_badge "$SESSION_WATCHER_STATE") $SESSION_WATCHER_STATE**
+- Chain-report экстрактора: **$(render_verdict_badge "$CHAIN_REPORT_STATE") $CHAIN_REPORT_STATE**
+- Google Drive sync: **$(render_verdict_badge "$GOOGLE_DRIVE_STATE") $GOOGLE_DRIVE_STATE**
+- Ключевые runtime-скрипты: **$(render_verdict_badge "$RUNTIME_SCRIPTS_STATE") $RUNTIME_SCRIPTS_STATE**
+- Секреты и helper-слой: **$(render_verdict_badge "$SECRETS_LAYER_STATE") $SECRETS_LAYER_STATE**
 
 ## Задачи агентов
 
@@ -660,7 +676,7 @@ archive_old_reports() {
 }
 
 emit_session_open_hook_json() {
-    local payload prompt open_screen
+    local payload prompt open_screen failed_cards env_cards attention_cards
     payload=$(cat)
     prompt=$(printf '%s' "$payload" | jq -r '.prompt // .user_prompt // .userPrompt // .text // .message // .content // ""' 2>/dev/null || printf '')
 
@@ -668,11 +684,26 @@ emit_session_open_hook_json() {
         exit 0
     fi
 
+    probe_environment
+    failed_cards=$(build_problem_cards)
+    env_cards=$(build_environment_cards)
+    attention_cards="${env_cards}${failed_cards}"
+    evaluate_brain_state "$failed_cards" "$env_cards"
     open_screen=$(build_session_open_screen)
+
     jq -n \
         --arg systemMessage "$open_screen" \
         --arg additionalContext "Пользователь запустил открытие рабочей сессии. Сначала покажи стартовый экран состояния экзокортекса, затем проведи ритуал согласования. Не переходи к задачам и не начинай исследование до явного подтверждения пользователя." \
-        '{systemMessage:$systemMessage,hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:$additionalContext}}'
+        --arg overallStatus "$BRAIN_STATE" \
+        --argjson openAllowed "$(if [ "$BRAIN_STATE" = "green" ]; then echo true; else echo false; fi)" \
+        --argjson confirmationRequired "$(if [ "$BRAIN_STATE" = "yellow" ]; then echo true; else echo false; fi)" \
+        --arg blockingIssues "$env_cards$failed_cards" \
+        --arg warnings "$attention_cards" \
+        --arg strategist "$STRATEGIST_OPERABILITY_STATE" \
+        --arg extractor "$EXTRACTOR_OPERABILITY_STATE" \
+        --arg drive "$GOOGLE_DRIVE_STATE" \
+        --arg conveyor "$CREATIVE_CONVEYOR_STATE" \
+        '{systemMessage:$systemMessage,hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:$additionalContext,overall_status:$overallStatus,open_allowed:$openAllowed,confirmation_required:$confirmationRequired,blocking_issues:$blockingIssues,warnings:$warnings,checks:[{name:"strategist",status:$strategist},{name:"extractor",status:$extractor},{name:"creative_conveyor",status:$conveyor},{name:"google_drive_sync",status:$drive}]}}'
 }
 
 REPORT=$(generate_report)
