@@ -85,8 +85,23 @@ EOF
 classify_failure() {
     local tmp_out="$1"
 
-    if grep -Eq 'ANTHROPIC_AUTH_TOKEN is not set|apiKeyHelper|authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|helper.*not.*set' "$tmp_out" 2>/dev/null; then
+    if grep -Eq 'ANTHROPIC_AUTH_TOKEN is not set|apiKeyHelper|authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|helper.*not.*set|invalid_grant' "$tmp_out" 2>/dev/null; then
         echo "auth_failed"
+        return
+    fi
+
+    if grep -Eq 'insufficient balance|预扣费额度失败|quota|credit balance|billing' "$tmp_out" 2>/dev/null; then
+        echo "billing_failed"
+        return
+    fi
+
+    if grep -Eq 'No available Claude accounts support the requested model|requested model' "$tmp_out" 2>/dev/null; then
+        echo "model_unavailable"
+        return
+    fi
+
+    if grep -Eq 'ECONNRESET|Unable to connect to API|timed out|ENOTFOUND|socket hang up' "$tmp_out" 2>/dev/null; then
+        echo "network_failed"
         return
     fi
 

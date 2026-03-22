@@ -13,7 +13,8 @@ ENV_FILE="$HOME/.config/aist/env"
 DEFAULT_CLAUDE_PATH="/opt/homebrew/bin/claude"
 
 AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
-AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash --model claude-sonnet-4-6}"
+AI_CLI_MODEL="${AI_CLI_MODEL:-}"
+AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
 
 mkdir -p "$LOG_DIR"
 
@@ -113,6 +114,63 @@ fetch_wakatime_data() {
     fi
 }
 
+build_claude_args() {
+    local args=()
+
+    if [ -n "$AI_CLI_EXTRA_FLAGS" ]; then
+        # shellcheck disable=SC2206
+        args=($AI_CLI_EXTRA_FLAGS)
+    fi
+
+    if [ -n "$AI_CLI_MODEL" ]; then
+        args+=(--model "$AI_CLI_MODEL")
+    fi
+
+    printf '%s\n' "${args[@]}"
+}
+
+classify_runtime_failure() {
+    local tmp_out="$1"
+
+    if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|invalid_grant' "$tmp_out" 2>/dev/null; then
+        echo "auth_failed"
+        return
+    fi
+
+    if grep -Eq 'insufficient balance|预扣费额度失败|quota|credit balance|billing' "$tmp_out" 2>/dev/null; then
+        echo "billing_failed"
+        return
+    fi
+
+    if grep -Eq 'No available Claude accounts support the requested model|requested model' "$tmp_out" 2>/dev/null; then
+        echo "model_unavailable"
+        return
+    fi
+
+    if grep -Eq 'ECONNRESET|Unable to connect to API|timed out|ENOTFOUND|socket hang up' "$tmp_out" 2>/dev/null; then
+        echo "network_failed"
+        return
+    fi
+
+    if grep -Eq 'No such file or directory|command not found|Permission denied' "$tmp_out" 2>/dev/null; then
+        echo "preflight_failed"
+        return
+    fi
+
+    echo "failed"
+}
+
+failure_notification_text() {
+    case "$1" in
+        auth_failed) echo "проверь helper, env и refresh токена" ;;
+        billing_failed) echo "проверь баланс и квоты API" ;;
+        model_unavailable) echo "проверь доступную модель или убери жёсткий --model" ;;
+        network_failed) echo "проверь сеть или доступ к API" ;;
+        preflight_failed) echo "проверь CLI, файлы и права доступа" ;;
+        *) echo "проверь лог сценария" ;;
+    esac
+}
+
 run_claude() {
     local command_file="$1"
     local command_path="$PROMPTS_DIR/$command_file.md"
@@ -159,29 +217,46 @@ run_claude() {
     unset CLAUDECODE
 
     local tmp_out
+    local -a claude_args=()
     tmp_out=$(mktemp)
+    while IFS= read -r arg; do
+        [ -n "$arg" ] && claude_args+=("$arg")
+    done < <(build_claude_args)
     set +e
-    "$resolved_cli" $AI_CLI_EXTRA_FLAGS \
+    "$resolved_cli" "${claude_args[@]}" \
         $AI_CLI_PROMPT_FLAG "$prompt" \
         > "$tmp_out" 2>&1
     local exit_code=$?
     set -e
     cat "$tmp_out" >> "$LOG_FILE"
 
-    if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set' "$tmp_out" 2>/dev/null; then
-        log "CRITICAL: Auth failed via helper/env/custom API"
-        notify "🔴 Экзокортекс: auth failure" "Агент $command_file упал: проверь ~/.config/aist/env и helper"
+    local failure_kind=""
+    if [ $exit_code -ne 0 ]; then
+        failure_kind=$(classify_runtime_failure "$tmp_out")
+        case "$failure_kind" in
+            auth_failed)
+                log "CRITICAL: Auth failed via helper/env/custom API"
+                ;;
+            billing_failed)
+                log "CRITICAL: Billing/quota failure while running $command_file"
+                ;;
+            model_unavailable)
+                log "CRITICAL: Requested Claude model unavailable for current account/runtime"
+                ;;
+            network_failed)
+                log "CRITICAL: Network/API connectivity failure while running $command_file"
+                ;;
+            preflight_failed)
+                log "CRITICAL: Preflight/runtime prerequisites failed while running $command_file"
+                ;;
+        esac
+        notify "⚠️ Экзокортекс: ошибка агента" "strategist/$command_file: $(failure_notification_text "$failure_kind")"
         notify_telegram "$command_file"
         rm -f "$tmp_out"
-        return 17
-    fi
-    rm -f "$tmp_out"
-
-    if [ $exit_code -ne 0 ]; then
-        log "ERROR: claude exited with code $exit_code for $command_file"
-        notify "⚠️ Экзокортекс: ошибка агента" "strategist/$command_file завершился с кодом $exit_code"
         return $exit_code
     fi
+
+    rm -f "$tmp_out"
 
     log "Completed scenario: $command_file"
 
