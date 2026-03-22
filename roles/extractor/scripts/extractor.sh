@@ -13,7 +13,8 @@ ENV_FILE="/Users/alexander/.config/aist/env"
 DEFAULT_CLAUDE_PATH="/opt/homebrew/bin/claude"
 
 AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
-AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash --model claude-sonnet-4-6}"
+AI_CLI_MODEL="${AI_CLI_MODEL:-}"
+AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
 
 mkdir -p "$LOG_DIR"
 
@@ -106,6 +107,21 @@ preflight_check() {
     return 0
 }
 
+build_claude_args() {
+    local args=()
+
+    if [ -n "$AI_CLI_EXTRA_FLAGS" ]; then
+        # shellcheck disable=SC2206
+        args=($AI_CLI_EXTRA_FLAGS)
+    fi
+
+    if [ -n "$AI_CLI_MODEL" ]; then
+        args+=(--model "$AI_CLI_MODEL")
+    fi
+
+    printf '%s\n' "${args[@]}"
+}
+
 run_claude() {
     local command_file="$1"
     local extra_args="${2:-}"
@@ -140,6 +156,11 @@ run_claude() {
 $extra_args"
     fi
 
+    local -a claude_args=()
+    while IFS= read -r arg; do
+        [ -n "$arg" ] && claude_args+=("$arg")
+    done < <(build_claude_args)
+
     log "Starting process: $command_file"
     log "Command file: $command_path"
     log "Claude path: $resolved_cli"
@@ -150,8 +171,8 @@ $extra_args"
     local tmp_out
     tmp_out=$(mktemp)
     set +e
-    "$resolved_cli" $AI_CLI_EXTRA_FLAGS \
-        $AI_CLI_PROMPT_FLAG "$prompt" \
+    "$resolved_cli" "${claude_args[@]}" \
+        "$AI_CLI_PROMPT_FLAG" "$prompt" \
         > "$tmp_out" 2>&1
     local exit_code=$?
     set -e
@@ -213,10 +234,11 @@ case "${1:-}" in
         if [ -f "$CAPTURES_FILE" ]; then
             PENDING=$(grep -c '^### ' "$CAPTURES_FILE" 2>/dev/null) || PENDING=0
             PROCESSED=$(grep -c '\[processed' "$CAPTURES_FILE" 2>/dev/null) || PROCESSED=0
-            ACTUAL_PENDING=$((PENDING - PROCESSED))
+            ANALYZED=$(grep -c '\[analyzed' "$CAPTURES_FILE" 2>/dev/null) || ANALYZED=0
+            ACTUAL_PENDING=$((PENDING - PROCESSED - ANALYZED))
 
             if [ "$ACTUAL_PENDING" -le 0 ]; then
-                log "SKIP: No pending captures in inbox (total=$PENDING, processed=$PROCESSED)"
+                log "SKIP: No pending captures in inbox (total=$PENDING, processed=$PROCESSED, analyzed=$ANALYZED)"
                 exit 0
             fi
 

@@ -74,7 +74,7 @@ render_status_badge() {
         success) echo "✅" ;;
         skipped) echo "⏭️" ;;
         running) echo "🟦" ;;
-        auth_failed|billing_failed|model_unavailable|network_failed|preflight_failed|failed|stale_lock) echo "❌" ;;
+        auth_failed|billing_failed|model_unavailable|network_failed|timed_out|preflight_failed|failed|stale_lock) echo "❌" ;;
         *) echo "⚪" ;;
     esac
 }
@@ -88,6 +88,7 @@ render_status_label() {
         billing_failed) echo "ошибка баланса или квоты" ;;
         model_unavailable) echo "недоступна запрошенная модель" ;;
         network_failed) echo "сетевая ошибка API" ;;
+        timed_out) echo "превышен лимит времени" ;;
         preflight_failed) echo "ошибка предварительной проверки" ;;
         stale_lock) echo "зависшая блокировка" ;;
         failed) echo "ошибка" ;;

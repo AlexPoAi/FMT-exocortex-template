@@ -129,6 +129,56 @@ build_claude_args() {
     printf '%s\n' "${args[@]}"
 }
 
+DAY_CLOSE_TIMEOUT_SECONDS="300"
+
+timeout_for_command() {
+    case "$1" in
+        day-close) echo "$DAY_CLOSE_TIMEOUT_SECONDS" ;;
+        *) echo "0" ;;
+    esac
+}
+
+run_claude_with_timeout() {
+    local timeout_seconds="$1"
+    local output_file="$2"
+    local resolved_cli="$3"
+    local prompt_flag="$4"
+    local prompt_text="$5"
+    shift 5
+
+    local -a args=("$@")
+
+    if [ "$timeout_seconds" -le 0 ]; then
+        "$resolved_cli" "${args[@]}" "$prompt_flag" "$prompt_text" > "$output_file" 2>&1
+        return $?
+    fi
+
+    python3 - "$timeout_seconds" "$output_file" "$resolved_cli" "$prompt_flag" "$prompt_text" "${args[@]}" <<'PY'
+import subprocess
+import sys
+
+try:
+    timeout_seconds = int(sys.argv[1])
+    output_file = sys.argv[2]
+    resolved_cli = sys.argv[3]
+    prompt_flag = sys.argv[4]
+    prompt_text = sys.argv[5]
+    extra_args = sys.argv[6:]
+    cmd = [resolved_cli, *extra_args, prompt_flag, prompt_text]
+    with open(output_file, 'w', encoding='utf-8', errors='replace') as f:
+        try:
+            completed = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, timeout=timeout_seconds)
+            sys.exit(completed.returncode)
+        except subprocess.TimeoutExpired:
+            f.write(f"\nTIMEOUT: strategist scenario exceeded {timeout_seconds}s and was terminated\n")
+            sys.exit(124)
+except Exception as exc:
+    with open(sys.argv[2], 'a', encoding='utf-8', errors='replace') as f:
+        f.write(f"\nTIMEOUT_WRAPPER_ERROR: {exc}\n")
+    sys.exit(125)
+PY
+}
+
 classify_runtime_failure() {
     local tmp_out="$1"
 
@@ -152,6 +202,11 @@ classify_runtime_failure() {
         return
     fi
 
+    if grep -Eq 'TIMEOUT: strategist scenario exceeded|TIMEOUT_WRAPPER_ERROR' "$tmp_out" 2>/dev/null; then
+        echo "timed_out"
+        return
+    fi
+
     if grep -Eq 'No such file or directory|command not found|Permission denied' "$tmp_out" 2>/dev/null; then
         echo "preflight_failed"
         return
@@ -166,6 +221,7 @@ failure_notification_text() {
         billing_failed) echo "проверь баланс и квоты API" ;;
         model_unavailable) echo "проверь доступную модель или убери жёсткий --model" ;;
         network_failed) echo "проверь сеть или доступ к API" ;;
+        timed_out) echo "сценарий завис или превысил лимит времени" ;;
         preflight_failed) echo "проверь CLI, файлы и права доступа" ;;
         *) echo "проверь лог сценария" ;;
     esac
@@ -174,6 +230,9 @@ failure_notification_text() {
 run_claude() {
     local command_file="$1"
     local command_path="$PROMPTS_DIR/$command_file.md"
+    local run_started_at run_started_epoch
+    run_started_at="$(date '+%Y-%m-%d %H:%M:%S')"
+    run_started_epoch=$(date +%s)
 
     if [ ! -f "$command_path" ]; then
         log "ERROR: Command file not found: $command_path"
@@ -209,28 +268,36 @@ run_claude() {
         prompt="${prompt//\{\{WAKATIME_WEEK\}\}/$waka_week}"
     fi
 
-    log "Starting scenario: $command_file"
-    log "Command file: $command_path"
-    log "Claude path: $resolved_cli"
-
-    cd "$WORKSPACE"
-    unset CLAUDECODE
-
     local tmp_out
+    local timeout_seconds
+    local run_finished_epoch elapsed_seconds
     local -a claude_args=()
     tmp_out=$(mktemp)
     while IFS= read -r arg; do
         [ -n "$arg" ] && claude_args+=("$arg")
     done < <(build_claude_args)
+    timeout_seconds=$(timeout_for_command "$command_file")
+
+    log "Starting scenario: $command_file"
+    log "Command file: $command_path"
+    log "Claude path: $resolved_cli"
+    if [ "$timeout_seconds" -gt 0 ]; then
+        log "Runtime budget: ${timeout_seconds}s"
+    else
+        log "Runtime budget: unlimited"
+    fi
+
+    cd "$WORKSPACE"
+    unset CLAUDECODE
     set +e
-    "$resolved_cli" "${claude_args[@]}" \
-        $AI_CLI_PROMPT_FLAG "$prompt" \
-        > "$tmp_out" 2>&1
+    run_claude_with_timeout "$timeout_seconds" "$tmp_out" "$resolved_cli" "$AI_CLI_PROMPT_FLAG" "$prompt" "${claude_args[@]}"
     local exit_code=$?
     set -e
     cat "$tmp_out" >> "$LOG_FILE"
 
     local failure_kind=""
+    run_finished_epoch=$(date +%s)
+    elapsed_seconds=$(( run_finished_epoch - run_started_epoch ))
     if [ $exit_code -ne 0 ]; then
         failure_kind=$(classify_runtime_failure "$tmp_out")
         case "$failure_kind" in
@@ -246,10 +313,14 @@ run_claude() {
             network_failed)
                 log "CRITICAL: Network/API connectivity failure while running $command_file"
                 ;;
+            timed_out)
+                log "CRITICAL: Scenario $command_file exceeded time limit (${timeout_seconds}s)"
+                ;;
             preflight_failed)
                 log "CRITICAL: Preflight/runtime prerequisites failed while running $command_file"
                 ;;
         esac
+        log "Scenario result: $command_file status=$failure_kind exit_code=$exit_code elapsed=${elapsed_seconds}s started_at=$run_started_at"
         notify "⚠️ Экзокортекс: ошибка агента" "strategist/$command_file: $(failure_notification_text "$failure_kind")"
         notify_telegram "$command_file"
         rm -f "$tmp_out"
@@ -259,6 +330,7 @@ run_claude() {
     rm -f "$tmp_out"
 
     log "Completed scenario: $command_file"
+    log "Scenario result: $command_file status=success exit_code=0 elapsed=${elapsed_seconds}s started_at=$run_started_at"
 
     if git -C "$WORKSPACE" diff --quiet origin/main..HEAD 2>/dev/null; then
         log "No unpushed commits"
@@ -288,7 +360,7 @@ acquire_lock() {
     local lockfile="$LOCK_DIR/${scenario}.${DATE}.lock"
     if ! mkdir "$lockfile" 2>/dev/null; then
         log "SKIP: $scenario already running (lock exists: $lockfile)"
-        exit 0
+        exit 2
     fi
     trap "rmdir '$lockfile' 2>/dev/null" EXIT
 }
@@ -388,6 +460,7 @@ case "${1:-}" in
         notify_telegram "note-review"
         ;;
     "day-close")
+        acquire_lock "day-close"
         log "Manual: running day close"
         run_claude "day-close"
         notify_telegram "day-close"

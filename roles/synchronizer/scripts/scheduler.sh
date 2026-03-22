@@ -100,6 +100,11 @@ classify_failure() {
         return
     fi
 
+    if grep -Eq 'TIMEOUT: strategist scenario exceeded|TIMEOUT_WRAPPER_ERROR' "$tmp_out" 2>/dev/null; then
+        echo "timed_out"
+        return
+    fi
+
     if grep -Eq 'ECONNRESET|Unable to connect to API|timed out|ENOTFOUND|socket hang up' "$tmp_out" 2>/dev/null; then
         echo "network_failed"
         return

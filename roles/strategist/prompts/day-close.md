@@ -9,7 +9,17 @@
 
 - **WeekPlan:** /Users/alexander/Github/DS-strategy/current/WeekPlan W*.md (последний по дате)
 - **MEMORY:** ~/.claude/projects/-Users-alexander-Github/memory/MEMORY.md
+- **SESSION-CONTEXT:** /Users/alexander/Github/DS-strategy/current/SESSION-CONTEXT.md
 - **Exocortex backup:** /Users/alexander/Github/DS-strategy/exocortex/
+
+## Truthfulness gate
+
+Это сценарий **закрытия дня**, а не `note-review` и не `day-plan`.
+
+- **НЕ использовать** `fleeting-notes.md`, `unsatisfied-questions.md`, `Notes-Archive.md`, `DayPlan*.md`, если они не нужны прямо для шагов ниже.
+- Отсутствие этих файлов **не является blocker** для `day-close`.
+- Если отсутствует обязательный вход именно для `day-close` (WeekPlan, MEMORY.md, SESSION-CONTEXT.md, exocortex backup dir, git-репозиторий DS-strategy), остановись быстро и честно сообщи конкретную причину.
+- **Никогда не пиши** пользователю `Git: закоммичен и запушен ✅`, `Day-Close завершён` или любой другой success-итог, если ты это не проверил по реальным git/file артефактам.
 
 ## Алгоритм
 
@@ -57,8 +67,13 @@ cp ~/.claude/projects/-Users-alexander-Github/memory/*.md /Users/alexander/Githu
 
 ### 5. Закоммитить
 
-- Закоммить все изменения в `DS-strategy` (WeekPlan + exocortex backup)
+- Закоммить все изменения в `DS-strategy` (WeekPlan + MEMORY + SESSION-CONTEXT + exocortex backup, если они реально менялись)
 - Запуши
+- Перед сообщением пользователю **обязательно проверь**, что:
+  - `git status --short` не показывает незакоммиченных целевых изменений,
+  - локальный commit действительно создан,
+  - `git push` действительно завершился успешно.
+- Если любой из этих пунктов не выполнен — **не объявляй успех**, а явно перечисли, что именно не завершилось.
 
 ## Правила
 
@@ -66,6 +81,10 @@ cp ~/.claude/projects/-Users-alexander-Github/memory/*.md /Users/alexander/Githu
 - **Не создавать отдельный файл отчёта** — итоги дня войдут в DayPlan следующего утра (шаг 1 day-plan)
 - Если коммитов за день нет — написать «Нет активности» и всё равно сделать backup
 - Выводить итоги на экран для пользователя
+- Если сценарий завершился частично, выводить отдельный блок:
+  - что выполнено;
+  - что не выполнено;
+  - какой конкретный блокер мешает считать день закрытым.
 
 ## Вывод на экран (шаблон)
 
