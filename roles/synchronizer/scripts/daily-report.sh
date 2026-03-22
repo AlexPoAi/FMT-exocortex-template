@@ -235,6 +235,16 @@ component_line() {
     printf -- '- %s: **%s %s**\n' "$label" "$(render_verdict_badge "$state")" "$state"
 }
 
+join_cards() {
+    local first="$1"
+    local second="$2"
+    if [ -n "$first" ] && [ -n "$second" ]; then
+        printf '%s\n\n%s' "$first" "$second"
+    else
+        printf '%s%s' "$first" "$second"
+    fi
+}
+
 build_evidence_problem_card() {
     local title="$1"
     local problem="$2"
@@ -475,7 +485,7 @@ build_problem_cards() {
                     "$(render_status_label "$STATUS")" \
                     "evidence=$(render_evidence_label "${EVIDENCE_STATUS:-unknown}"), summary=${EVIDENCE_SUMMARY:-${SUMMARY:-—}}, updated=${UPDATED_AT:-—}" \
                     "задача не может считаться truthful green" \
-                    "проверить ${LOG_PATH:-лог} и восстановить operational evidence")\n"
+                    "проверить ${LOG_PATH:-лог} и восстановить operational evidence")\n\n"
                 ;;
         esac
     done
@@ -561,7 +571,7 @@ build_session_open_screen() {
     local failed_cards env_cards attention_cards
     failed_cards=$(build_problem_cards)
     env_cards=$(build_environment_cards)
-    attention_cards="${env_cards}${failed_cards}"
+    attention_cards=$(join_cards "$env_cards" "$failed_cards")
     evaluate_brain_state "$failed_cards" "$env_cards"
 
     cat <<EOF
@@ -628,7 +638,7 @@ generate_report() {
     local failed_cards env_cards attention_cards headline
     failed_cards=$(build_problem_cards)
     env_cards=$(build_environment_cards)
-    attention_cards="${env_cards}${failed_cards}"
+    attention_cards=$(join_cards "$env_cards" "$failed_cards")
     evaluate_brain_state "$failed_cards" "$env_cards"
 
     headline="$BRAIN_BADGE Среда: $BRAIN_LABEL"
@@ -687,7 +697,7 @@ emit_session_open_hook_json() {
     probe_environment
     failed_cards=$(build_problem_cards)
     env_cards=$(build_environment_cards)
-    attention_cards="${env_cards}${failed_cards}"
+    attention_cards=$(join_cards "$env_cards" "$failed_cards")
     evaluate_brain_state "$failed_cards" "$env_cards"
     open_screen=$(build_session_open_screen)
 
@@ -697,7 +707,7 @@ emit_session_open_hook_json() {
         --arg overallStatus "$BRAIN_STATE" \
         --argjson openAllowed "$(if [ "$BRAIN_STATE" = "green" ]; then echo true; else echo false; fi)" \
         --argjson confirmationRequired "$(if [ "$BRAIN_STATE" = "yellow" ]; then echo true; else echo false; fi)" \
-        --arg blockingIssues "$env_cards$failed_cards" \
+        --arg blockingIssues "$attention_cards" \
         --arg warnings "$attention_cards" \
         --arg strategist "$STRATEGIST_OPERABILITY_STATE" \
         --arg extractor "$EXTRACTOR_OPERABILITY_STATE" \
