@@ -295,11 +295,11 @@ dispatch() {
 }
 
 show_status() {
-    echo "=== Exocortex Scheduler Status ==="
-    echo "Date: $DATE  Hour: $HOUR  DOW: $DOW  Week: W$WEEK"
+    echo "=== Планировщик экзокортекса ==="
+    echo "Дата: $DATE  Час: $HOUR  День недели: $DOW  Неделя: W$WEEK"
     echo ""
 
-    echo "--- Today's runs ---"
+    echo "--- Запуски за сегодня ---"
     local daily_files
     daily_files=$(ls "$STATE_DIR"/*-"$DATE" 2>/dev/null || true)
     if [ -n "$daily_files" ]; then
@@ -307,11 +307,11 @@ show_status() {
             echo "  $(basename "$f"): $(cat "$f")"
         done
     else
-        echo "  (none)"
+        echo "  нет запусков"
     fi
 
     echo ""
-    echo "--- Interval markers ---"
+    echo "--- Интервальные маркеры ---"
     local interval_files
     interval_files=$(ls "$STATE_DIR"/*-last 2>/dev/null || true)
     if [ -n "$interval_files" ]; then
@@ -319,14 +319,14 @@ show_status() {
             local ts ago
             ts=$(cat "$f")
             ago=$(( NOW - ts ))
-            echo "  $(basename "$f"): ${ago}s ago"
+            echo "  $(basename "$f"): ${ago}с назад"
         done
     else
-        echo "  (none)"
+        echo "  нет запусков"
     fi
 
     echo ""
-    echo "--- Week markers ---"
+    echo "--- Недельные маркеры ---"
     local week_files
     week_files=$(ls "$STATE_DIR"/*-W"$WEEK" 2>/dev/null || true)
     if [ -n "$week_files" ]; then
@@ -334,21 +334,21 @@ show_status() {
             echo "  $(basename "$f"): $(cat "$f")"
         done
     else
-        echo "  (none)"
+        echo "  нет запусков"
     fi
 
     echo ""
-    echo "--- Latest task statuses ---"
+    echo "--- Последние статусы задач ---"
     local status_files
     status_files=$(ls "$STATUS_DIR"/*.status 2>/dev/null || true)
     if [ -n "$status_files" ]; then
         echo "$status_files" | while read -r f; do
             [ -f "$f" ] || continue
             . "$f"
-            echo "  ${TASK_NAME}: ${STATUS} (updated ${UPDATED_AT})"
+            echo "  ${TASK_NAME}: ${STATUS} (обновлено ${UPDATED_AT})"
         done
     else
-        echo "  (none)"
+        echo "  нет запусков"
     fi
 }
 
@@ -360,10 +360,10 @@ case "${1:-}" in
         show_status
         ;;
     *)
-        echo "Usage: scheduler.sh {dispatch|status}"
+        echo "Использование: scheduler.sh {dispatch|status}"
         echo ""
-        echo "  dispatch  — check schedules and run due agents"
-        echo "  status    — show current state of all agents"
+        echo "  dispatch  — проверить расписание и запустить нужных агентов"
+        echo "  status    — показать текущее состояние всех агентов"
         exit 1
         ;;
 esac

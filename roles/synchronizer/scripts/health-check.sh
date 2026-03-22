@@ -35,11 +35,7 @@ notify_telegram() {
     if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
         curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
             -d "chat_id=$TELEGRAM_CHAT_ID" \
-            -d "text=🚨 Exocortex Health Check Alert
-
-$message
-
-Time: $TIMESTAMP" \
+            -d "text=🚨 Проверка здоровья экзокортекса\n\n$message\n\nВремя: $TIMESTAMP" \
             -d "parse_mode=HTML" > /dev/null 2>&1 || true
     fi
 }
@@ -69,63 +65,82 @@ load_status() {
 }
 
 ERRORS=()
+WARNINGS=()
 
-log "=== Health Check Started ==="
+log "=== Проверка здоровья запущена ==="
 
 if launchctl list | grep -q 'com.exocortex.scheduler'; then
-    log "OK: scheduler launchd job is loaded"
+    log "ОК: планировщик загружен"
 else
-    ERRORS+=("❌ Scheduler launchd job is NOT loaded")
-    log "ERROR: Scheduler launchd job is NOT loaded"
+    ERRORS+=("🔴 Планировщик экзокортекса не загружен")
+    log "ОШИБКА: планировщик экзокортекса не загружен"
 fi
 
 if launchctl list | grep -q 'com.exocortex.health-check'; then
-    log "OK: health-check launchd job is loaded"
+    log "ОК: проверка среды загружена"
 else
-    ERRORS+=("⚠️ Health-check launchd job is NOT loaded")
-    log "WARNING: Health-check launchd job is NOT loaded"
+    WARNINGS+=("🟡 Проверка среды не загружена")
+    log "ВНИМАНИЕ: проверка среды не загружена"
 fi
 
 if [ -x "$HOME/.config/aist/anthropic_auth_helper.sh" ] && "$HOME/.config/aist/anthropic_auth_helper.sh" >/dev/null 2>&1; then
-    log "OK: auth helper works"
+    log "ОК: помощник авторизации исправен"
 else
-    ERRORS+=("🔴 Auth helper/env is broken")
-    log "CRITICAL: auth helper/env is broken"
+    ERRORS+=("🔴 Помощник авторизации или env-слой сломан")
+    log "ОШИБКА: помощник авторизации или env-слой сломан"
 fi
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
     load_status "$task"
     case "$task:$STATUS" in
         strategist-note-review:missing|strategist-week-review:missing)
-            log "INFO: $task has no status yet for current schedule window"
+            log "НЕТ СТАТУСА: $task ещё не должен был запускаться в текущем окне"
             ;;
         *:success|*:skipped|*:running)
-            log "OK: $task status=$STATUS"
+            log "ОК: $task status=$STATUS"
             ;;
         *)
-            ERRORS+=("❌ $task status=$STATUS (${SUMMARY:-no summary})")
-            log "ERROR: $task status=$STATUS summary=${SUMMARY:-no summary}"
+            WARNINGS+=("🟡 $task: $(printf '%s' "$STATUS" | sed 's/auth_failed/ошибка авторизации/; s/preflight_failed/ошибка предварительной проверки/; s/failed/ошибка/; s/missing/нет статуса/; s/stale_lock/зависшая блокировка/') (${SUMMARY:-без описания})")
+            log "ВНИМАНИЕ: $task status=$STATUS summary=${SUMMARY:-no summary}"
             ;;
     esac
 done
 
-log "=== Health Check Completed ==="
+log "=== Проверка здоровья завершена ==="
 
-if [ ${#ERRORS[@]} -eq 0 ]; then
-    log "✅ All systems operational"
+if [ ${#ERRORS[@]} -eq 0 ] && [ ${#WARNINGS[@]} -eq 0 ]; then
+    log "✅ Среда исправна"
     exit 0
 fi
 
-log "❌ Found ${#ERRORS[@]} issue(s)"
-ERROR_MESSAGE="Found ${#ERRORS[@]} issue(s):
+if [ ${#ERRORS[@]} -gt 0 ]; then
+    log "❌ Найдено ${#ERRORS[@]} критических проблем и ${#WARNINGS[@]} предупреждений"
+else
+    log "⚠️ Найдено ${#WARNINGS[@]} предупреждений"
+fi
 
-"
-for error in "${ERRORS[@]}"; do
-    ERROR_MESSAGE+="$error
-"
-done
+MESSAGE=""
+if [ ${#ERRORS[@]} -gt 0 ]; then
+    MESSAGE+="Критические проблемы:\n\n"
+    for error in "${ERRORS[@]}"; do
+        MESSAGE+="$error\n"
+    done
+    MESSAGE+="\n"
+fi
 
-notify_macos "⚠️ Exocortex Health Check" "Found ${#ERRORS[@]} issue(s). Check AGENTS-STATUS.md"
-notify_telegram "$ERROR_MESSAGE"
-log "Notifications sent"
-exit 1
+if [ ${#WARNINGS[@]} -gt 0 ]; then
+    MESSAGE+="Предупреждения:\n\n"
+    for warning in "${WARNINGS[@]}"; do
+        MESSAGE+="$warning\n"
+    done
+fi
+
+notify_macos "Экзокортекс: проверка среды" "Проверь AGENTS-STATUS.md и экран открытия сессии"
+notify_telegram "$MESSAGE"
+log "Уведомления отправлены"
+
+if [ ${#ERRORS[@]} -gt 0 ]; then
+    exit 1
+fi
+
+exit 0
