@@ -130,10 +130,20 @@ build_claude_args() {
 }
 
 DAY_CLOSE_TIMEOUT_SECONDS="300"
+MORNING_TIMEOUT_SECONDS="420"
+NOTE_REVIEW_TIMEOUT_SECONDS="420"
+WEEK_REVIEW_TIMEOUT_SECONDS="600"
+SESSION_PREP_TIMEOUT_SECONDS="420"
+DAY_PLAN_TIMEOUT_SECONDS="420"
 
 timeout_for_command() {
     case "$1" in
         day-close) echo "$DAY_CLOSE_TIMEOUT_SECONDS" ;;
+        note-review) echo "$NOTE_REVIEW_TIMEOUT_SECONDS" ;;
+        week-review) echo "$WEEK_REVIEW_TIMEOUT_SECONDS" ;;
+        session-prep) echo "$SESSION_PREP_TIMEOUT_SECONDS" ;;
+        day-plan) echo "$DAY_PLAN_TIMEOUT_SECONDS" ;;
+        morning) echo "$MORNING_TIMEOUT_SECONDS" ;;
         *) echo "0" ;;
     esac
 }

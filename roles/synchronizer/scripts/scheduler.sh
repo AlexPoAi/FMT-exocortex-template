@@ -117,6 +117,7 @@ write_status() {
     local error_summary="${11:-}"
     local staleness_budget_sec="${12:-$(default_staleness_budget_for "$task")}"
     local produced_artifacts="${13:-}"
+    local completed_window="${14:-false}"
     local status_file prev_last_success prev_last_failure last_success_at last_failure_at
     status_file=$(status_file_for "$task")
 
@@ -151,6 +152,7 @@ EVIDENCE_SUMMARY="$(escape_value "$evidence_summary")"
 ERROR_SUMMARY="$(escape_value "$error_summary")"
 STALENESS_BUDGET_SEC="$staleness_budget_sec"
 PRODUCED_ARTIFACTS="$(escape_value "$produced_artifacts")"
+COMPLETED_WINDOW="$completed_window"
 LOG_PATH="$log_path"
 UPDATED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
 EOF
