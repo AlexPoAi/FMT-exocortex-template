@@ -13,10 +13,10 @@ set -euo pipefail
 TEMPLATE_DIR="${1:-$HOME/Github/FMT-exocortex-template}"
 FAIL=0
 
-if grep -r -q -E --include="*.md" --include="*.sh" --include="*.json" --include="*.plist" --include="*.yaml" --include="*.yml" '\{\{(WORKSPACE_DIR|HOME_DIR|CLAUDE_PROJECT_SLUG|CLAUDE_PATH|GITHUB_USER|TIMEZONE_HOUR|TIMEZONE_DESC)\}\}' "$TEMPLATE_DIR" 2>/dev/null; then
-    TEMPLATE_STATE="pristine"
-elif grep -r -q -F --include="*.md" --include="*.sh" --include="*.json" --include="*.plist" --include="*.yaml" --include="*.yml" "$HOME" "$TEMPLATE_DIR" 2>/dev/null; then
+if grep -r -q -F --include="*.md" --include="*.sh" --include="*.json" --include="*.plist" --include="*.yaml" --include="*.yml" "$HOME" "$TEMPLATE_DIR" 2>/dev/null; then
     TEMPLATE_STATE="configured"
+elif grep -r -q -E --include="*.md" --include="*.sh" --include="*.json" --include="*.plist" --include="*.yaml" --include="*.yml" '\{\{(WORKSPACE_DIR|HOME_DIR|CLAUDE_PROJECT_SLUG|CLAUDE_PATH|GITHUB_USER|TIMEZONE_HOUR|TIMEZONE_DESC)\}\}' "$TEMPLATE_DIR" 2>/dev/null; then
+    TEMPLATE_STATE="pristine"
 else
     TEMPLATE_STATE="pristine"
 fi
