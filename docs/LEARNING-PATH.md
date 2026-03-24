@@ -522,6 +522,11 @@ Open (вход)           →  Work (работа)            →  Close (вых
 - [CLAUDE.md](../CLAUDE.md) § 2 — полные протоколы
 - [memory/protocol-open.md](../memory/protocol-open.md), [protocol-work.md](../memory/protocol-work.md), [protocol-close.md](../memory/protocol-close.md)
 
+**Source-of-truth по протоколам:**
+- canonical source — `FMT-exocortex-template/memory/protocol-*.md`
+- runtime mirror — `~/.claude/projects/<slug>/memory/`
+- backup snapshot — `DS-strategy/exocortex/`
+
 ### 5.2. Трёхслойная память
 
 | Слой | Файл | Что содержит | Размер | Когда читается |

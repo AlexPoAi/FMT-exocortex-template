@@ -1,6 +1,6 @@
 # Инструкции для всех репозиториев
 
-> Slim-ядро: триггеры + правила. Детали протоколов → memory/protocol-*.md (подгружаются по триггеру).
+> Slim-ядро: триггеры + правила. Canonical source протоколов → `FMT-exocortex-template/memory/protocol-*.md`; при setup/update они зеркалятся в runtime memory `~/.claude/projects/<slug>/memory/` и подгружаются по триггеру.
 
 ---
 

@@ -231,6 +231,8 @@ launchctl list | grep strategist
 
 MCP (Model Context Protocol) — это доступ Claude Code к базе знаний платформы: документам, руководствам, цифровому двойнику. Подключение настроено автоматически через `.claude/settings.local.json`.
 
+> **Протоколы Open/Work/Close:** authoring source живёт в `FMT-exocortex-template/memory/protocol-*.md`. Во время setup эти файлы копируются в runtime mirror `~/.claude/projects/<slug>/memory/`. Это не папка `~/Github/memory/`.
+
 В Claude Code (VS Code или терминале):
 ```
 # Открой Claude Code в папке экзокортекса

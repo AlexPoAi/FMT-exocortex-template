@@ -12,7 +12,8 @@
 | Чеклисты | `memory/checklists.md` |
 | SOTA-практики (18 шт.) | `memory/sota-reference.md` |
 | Протокол Open (WP Gate, Ритуал) | `memory/protocol-open.md` |
-| Протокол Close (чеклист, шаблон) | `memory/protocol-close.md` |
+| Протокол Work (правила выполнения) | `memory/protocol-work.md` |
+| Протокол Close (truthful close contract) | `memory/protocol-close.md` |
 | Нулевые принципы + иерархия | `ZP/README.md` |
 | Кодирование сущностей | `SPF/spec/SPF.SPEC.001-entity-coding.md` |
 | Масштабируемость Pack | `SPF/spec/SPF.SPEC.003-pack-scalability.md` |

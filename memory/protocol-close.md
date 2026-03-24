@@ -21,7 +21,24 @@
 
 ## Алгоритм Close
 
-0. **Pull** → `cd DS-strategy && git pull --rebase`
+### Truthful close contract
+
+`close-task.sh` — это runtime executor закрытия. Он делает только то, что реально автоматизировано в текущем контуре:
+
+0. **Git preflight** по рабочим репозиториям:
+   - проверить blocking git state (`rebase`, `merge`, `index.lock` и т.п.)
+   - dirty repo без блокировки → `pull --rebase --autostash` → `add` → `commit` → `push`
+   - blocking state → truthful warning/error, а не ложный success
+1. **SESSION-CONTEXT** → обновить `DS-strategy/current/SESSION-CONTEXT.md`
+2. **Backup snapshot** → скопировать runtime memory mirror `~/.claude/projects/<slug>/memory/*.md` и корневой `CLAUDE.md` в `DS-strategy/exocortex/`
+3. **Ecosystem sync** → запустить `roles/extractor/scripts/update-ecosystem.sh`, если он доступен
+4. **Second git pass** → повторно закоммитить и запушить изменения, появившиеся из backup/sync, чтобы не оставлять post-close dirty state
+5. **Final verification** → если после этого repo dirty, close считается НЕ завершённым
+
+### Manual / role-level close tasks
+
+Следующие шаги относятся к общему протоколу роли, но **не гарантируются самим `close-task.sh` автоматически**. Их нужно выполнять отдельно, когда они релевантны:
+
 1. **Knowledge Extraction** → прочитай и выполни `roles/extractor/prompts/session-close.md`:
    - Собрать отложенные captures + проверить пропущенные
    - Классифицировать → маршрутизировать → формализовать → валидировать
@@ -30,19 +47,17 @@
    - Применить одобренные (accept → Pack/CLAUDE.md/memory)
 2. Обновить MEMORY.md (статус РП)
 3. Зафиксировать: что сделано, что осталось
-4. Закоммитить (с подтверждением)
-5. Обновить `DS-strategy/current/Plan W{N}...` (статусы РП)
-6. Синхронизировать backup: `memory/ + CLAUDE.md → DS-strategy/exocortex/`
-7. **WP Context File:**
+4. Обновить `DS-strategy/current/Plan W{N}...` (статусы РП)
+5. **WP Context File:**
    - in_progress + ≥2 сессий → обновить `DS-strategy/inbox/WP-{N}-{slug}.md`
    - done → `mv inbox/WP-{N}-*.md → archive/wp-contexts/` (сразу, не откладывая)
    - Проверка: РП есть в WeekPlan и MEMORY.md? Нет → добавить
-8. **Незавершённое и идеи:**
+6. **Незавершённое и идеи:**
    - Недоделка по РП → context file (секция «Осталось»)
    - Идея развития системы → `<repo>/MAPSTRATEGIC.md`
    - Новая задача → `DS-strategy/inbox/captures.md` или fleeting-notes.md
    - Зерно для поста → `DS-strategy/drafts/draft-list.md`
-9. **Draft-list проверка:**
+7. **Draft-list проверка:**
    - Были captures в Pack? → Предложить: «Pack обогащён — добавить черновик для поста?»
    - Обновить draft-list.md если создавались черновики в этой сессии
 
@@ -75,7 +90,16 @@
 
 ## Чеклист Close
 
+### Что гарантирует runtime (`close-task.sh`)
+
 - [ ] Все изменения закоммичены и запушены
+- [ ] `SESSION-CONTEXT.md` обновлён
+- [ ] Backup snapshot → `DS-strategy/exocortex/` синхронизирован
+- [ ] Generated changes после backup/sync не оставили dirty state
+- [ ] Truthful result banner сформирован
+
+### Что проверяется отдельно по ситуации
+
 - [ ] MEMORY.md обновлён (статусы РП)
 - [ ] DS-strategy/current/Plan обновлён
 - [ ] Captures применены
@@ -84,13 +108,12 @@
 - [ ] **Repo CLAUDE.md:** feat-коммиты → новые правила для CLAUDE.md репо?
 - [ ] **WP context:** коммиты реализуют пункт WP-плана → пункт done?
 - [ ] **Draft-list:** Pack обогащён → предложить черновик? Черновики из сессии → draft-list обновлён?
-- [ ] Backup → DS-strategy/exocortex/ синхронизирован
 - [ ] Context file: done → `mv inbox/WP-*.md → archive/wp-contexts/` (сразу при Close)
 - [ ] Отчёт Close сформирован
 - [ ] WP Context File создан/обновлён при ПЕРВОМ Close
 - [ ] Новое репо → MAPSTRATEGIC.md + Strategy.md
 
-Все ✅ → «Сессия закрыта.» Иначе — указать, что осталось.
+Все runtime-чеки ✅ → `close-task.sh` может завершить задачу. Остальные пункты определяют, закрыта ли роль truthfully на содержательном уровне.
 
 **Исключения:** сессия ≤15 мин, сессия-вопрос без изменений.
 
