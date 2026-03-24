@@ -12,50 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. Нет автор-специфичного контента
-      - name: Check for author-specific content
-        run: |
-          FAIL=0
-          for pattern in "tserentserenov" "PACK-MIM" "aist_bot_newarchitecture" "DS-Knowledge-Index-Tseren"; do
-            count=$(grep -rn "$pattern" . --include="*.md" --include="*.sh" \
-                    --include="*.json" --include="*.plist" --include="*.yaml" 2>/dev/null | wc -l)
-            if [ "$count" -gt 0 ]; then
-              echo "FAIL: Found '$pattern' in $count locations:"
-              grep -rn "$pattern" . --include="*.md" --include="*.sh" \
-                  --include="*.json" --include="*.plist" 2>/dev/null | head -5
-              FAIL=1
-            fi
-          done
-          [ "$FAIL" -eq 0 ] && echo "PASS: No author-specific content"
-          exit $FAIL
-
-      # 2. Нет захардкоженных /Users/ путей
-      - name: Check for hardcoded paths
-        run: |
-          FAIL=0
-          count=$(grep -rn '/Users/' . --include="*.md" --include="*.sh" \
-                  --include="*.json" --include="*.plist" 2>/dev/null | wc -l)
-          if [ "$count" -gt 0 ]; then
-            echo "FAIL: Found /Users/ in $count locations:"
-            grep -rn '/Users/' . --include="*.md" --include="*.sh" 2>/dev/null | head -5
-            FAIL=1
-          fi
-
-          count=$(grep -rn '/opt/homebrew' . --include="*.md" --include="*.sh" \
-                  --include="*.json" --include="*.plist" 2>/dev/null \
-                  | grep -v 'README.md' \
-                  | grep -v 'validate-template.yml' \
-                  | grep -v '/usr/local/bin.*:/opt/homebrew' \
-                  | wc -l)
-          if [ "$count" -gt 0 ]; then
-            echo "FAIL: Found /opt/homebrew in $count locations:"
-            grep -rn '/opt/homebrew' . --include="*.md" --include="*.sh" 2>/dev/null \
-                | grep -v 'README.md' | grep -v 'validate-template.yml' | head -5
-            FAIL=1
-          fi
-
-          [ "$FAIL" -eq 0 ] && echo "PASS: No hardcoded paths"
-          exit $FAIL
+      - name: Run template validator
+        run: bash setup/validate-template.sh .
 
       # 3. MEMORY.md — скелет
       - name: Check MEMORY.md is skeleton
@@ -77,6 +35,8 @@ jobs:
           FAIL=0
           for f in CLAUDE.md ONTOLOGY.md README.md \
                    memory/MEMORY.md memory/hard-distinctions.md \
+                   memory/protocol-open.md memory/protocol-work.md memory/protocol-close.md \
+                   memory/navigation.md \
                    roles/strategist/scripts/strategist.sh; do
             if [ ! -f "$f" ]; then
               echo "MISSING: $f"
