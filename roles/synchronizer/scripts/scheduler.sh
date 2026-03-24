@@ -42,7 +42,10 @@ WEEK=$(date +%V)
 NOW=$(date +%s)
 RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 
-mkdir -p "$STATE_DIR" "$STATUS_DIR" "$LOG_DIR"
+SCHEDULER_LOCK_DIR="$STATE_DIR/locks"
+DISPATCH_LOCK_DIR="$SCHEDULER_LOCK_DIR/dispatch"
+
+mkdir -p "$STATE_DIR" "$STATUS_DIR" "$LOG_DIR" "$SCHEDULER_LOCK_DIR"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [scheduler] $1" | tee -a "$LOG_FILE"
@@ -294,11 +297,20 @@ run_task() {
     local state_kind="$2"
     shift 2
 
-    local start_ts end_ts tmp_out exit_code summary status evidence_status evidence_summary produced_artifacts error_summary
+    local task_lock_dir="$SCHEDULER_LOCK_DIR/$task"
+    local start_ts end_ts tmp_out exit_code summary status evidence_status evidence_summary produced_artifacts error_summary completed_window
     start_ts="$(date '+%Y-%m-%d %H:%M:%S')"
     tmp_out=$(mktemp)
+    completed_window="false"
 
-    write_status "$task" "$RUN_ID" "running" "" "started by scheduler" "$start_ts" "" "$LOG_FILE" "pending" "выполняется" "" "$(default_staleness_budget_for "$task")" ""
+    if ! mkdir "$task_lock_dir" 2>/dev/null; then
+        end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
+        write_status "$task" "$RUN_ID" "stale_lock" "99" "task already running" "$start_ts" "$end_ts" "$LOG_FILE" "pending" "задача уже выполняется, повторный запуск пропущен" "lock collision" "$(default_staleness_budget_for "$task")" "" "false"
+        rm -f "$tmp_out"
+        return 99
+    fi
+
+    write_status "$task" "$RUN_ID" "running" "" "started by scheduler" "$start_ts" "" "$LOG_FILE" "pending" "выполняется" "" "$(default_staleness_budget_for "$task")" "" "false"
 
     set +e
     "$@" > "$tmp_out" 2>&1
@@ -310,6 +322,7 @@ run_task() {
     if [ "$exit_code" -eq 0 ]; then
         end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
         summary="completed successfully"
+        completed_window="true"
         local evidence_output
         evidence_output="$(collect_task_evidence "$task" "$tmp_out")"
         evidence_status="$(printf '%s\n' "$evidence_output" | sed -n '1p')"
@@ -318,15 +331,18 @@ run_task() {
         [ -n "$evidence_status" ] || evidence_status="weak"
         [ -n "$evidence_summary" ] || evidence_summary="нет подтверждённого evidence"
 
+        mark_task_state "$task" "$state_kind"
+
         if [ "$evidence_status" = "verified" ]; then
-            write_status "$task" "$RUN_ID" "success" "0" "$summary" "$start_ts" "$end_ts" "$LOG_FILE" "$evidence_status" "$evidence_summary" "" "$(default_staleness_budget_for "$task")" "$produced_artifacts"
-            mark_task_state "$task" "$state_kind"
+            write_status "$task" "$RUN_ID" "success" "0" "$summary" "$start_ts" "$end_ts" "$LOG_FILE" "$evidence_status" "$evidence_summary" "" "$(default_staleness_budget_for "$task")" "$produced_artifacts" "$completed_window"
+            rmdir "$task_lock_dir" 2>/dev/null || true
             rm -f "$tmp_out"
             return 0
         fi
 
         error_summary="exit code 0 without operational evidence"
-        write_status "$task" "$RUN_ID" "failed" "65" "task completed without evidence" "$start_ts" "$end_ts" "$LOG_FILE" "$evidence_status" "$evidence_summary" "$error_summary" "$(default_staleness_budget_for "$task")" "$produced_artifacts"
+        write_status "$task" "$RUN_ID" "failed" "65" "task completed without evidence" "$start_ts" "$end_ts" "$LOG_FILE" "$evidence_status" "$evidence_summary" "$error_summary" "$(default_staleness_budget_for "$task")" "$produced_artifacts" "$completed_window"
+        rmdir "$task_lock_dir" 2>/dev/null || true
         rm -f "$tmp_out"
         return 65
     fi
@@ -337,6 +353,7 @@ run_task() {
     end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
     error_summary="$summary"
     write_status "$task" "$RUN_ID" "$status" "$exit_code" "$summary" "$start_ts" "$end_ts" "$LOG_FILE" "failed" "операционное evidence не подтверждено" "$error_summary" "$(default_staleness_budget_for "$task")" ""
+    rmdir "$task_lock_dir" 2>/dev/null || true
     rm -f "$tmp_out"
     return "$exit_code"
 }
@@ -394,6 +411,12 @@ pre_archive_dayplan() {
 }
 
 dispatch() {
+    if ! mkdir "$DISPATCH_LOCK_DIR" 2>/dev/null; then
+        log "dispatch skipped: another dispatch is already running"
+        return 0
+    fi
+    trap 'rmdir "$DISPATCH_LOCK_DIR" 2>/dev/null || true' EXIT
+
     log "dispatch started (hour=$HOUR, dow=$DOW)"
     local ran=0
 

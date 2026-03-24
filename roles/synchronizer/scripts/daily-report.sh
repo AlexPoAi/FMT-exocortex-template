@@ -165,6 +165,9 @@ load_status() {
 
     local ref_ts
     ref_ts=$(task_reference_ts)
+    local completed_window
+    completed_window="${COMPLETED_WINDOW:-false}"
+
     if [ "$STATUS" != "missing" ] && ! task_status_is_current "$task" "$ref_ts"; then
         STATUS="stale"
         EXIT_CODE=""
@@ -176,6 +179,9 @@ load_status() {
         EXIT_CODE="65"
         ERROR_SUMMARY="success without verified operational evidence"
         SUMMARY="success without verified operational evidence"
+    elif [ "$STATUS" = "failed" ] && [ "$completed_window" = "true" ] && [ "${EVIDENCE_STATUS:-unknown}" = "weak" ]; then
+        STATUS="stale"
+        SUMMARY="completed without verified operational evidence"
     fi
 }
 
@@ -270,7 +276,7 @@ render_status_label() {
         success) echo "успех" ;;
         skipped) echo "пропущено по правилам" ;;
         running) echo "в процессе" ;;
-        stale) echo "устаревший статус" ;;
+        stale) echo "устаревший или неполный статус" ;;
         auth_failed) echo "ошибка авторизации" ;;
         billing_failed) echo "ошибка баланса или квоты" ;;
         model_unavailable) echo "недоступна запрошенная модель" ;;
