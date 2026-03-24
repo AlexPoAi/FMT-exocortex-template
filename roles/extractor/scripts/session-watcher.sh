@@ -1,5 +1,5 @@
 #!/bin/bash
-# Session Watcher — следит за pending-sessions/, запускает session-import
+# Session Watcher — следит за pending-sessions/, запускает session-import + session-tasks
 # Запускается launchd каждые 5 минут из чистой среды (без CLAUDECODE)
 
 PENDING_DIR="/Users/alexander/Github/DS-strategy/inbox/pending-sessions"
@@ -31,17 +31,25 @@ for session_file in "$PENDING_DIR"/*.md; do
     fname=$(basename "$session_file")
     log "Обрабатываю: $fname"
 
-    # Передаём путь к файлу через env переменную
     export SESSION_IMPORT_FILE="$session_file"
-    bash "$EXTRACTOR" session-import >> "$LOG_FILE" 2>&1
-    status=$?
 
-    if [ $status -eq 0 ]; then
-        mv "$session_file" "$PROCESSED_DIR/$fname"
-        log "✅ Готово: $fname → processed-sessions/"
-        # Финальный отчёт цепочки
-        bash "$(dirname "$0")/chain-report.sh" "$PROCESSED_DIR/$fname" | tee -a "$LOG_FILE"
-    else
-        log "❌ Ошибка обработки: $fname (код $status)"
+    bash "$EXTRACTOR" session-import >> "$LOG_FILE" 2>&1
+    import_status=$?
+
+    if [ $import_status -ne 0 ]; then
+        log "❌ Ошибка session-import: $fname (код $import_status)"
+        continue
     fi
+
+    bash "$EXTRACTOR" session-tasks >> "$LOG_FILE" 2>&1
+    tasks_status=$?
+
+    if [ $tasks_status -ne 0 ]; then
+        log "❌ Ошибка session-tasks: $fname (код $tasks_status)"
+        continue
+    fi
+
+    mv "$session_file" "$PROCESSED_DIR/$fname"
+    log "✅ Готово: $fname → processed-sessions/ (knowledge + tasks)"
+    bash "$(dirname "$0")/chain-report.sh" "$PROCESSED_DIR/$fname" | tee -a "$LOG_FILE"
 done

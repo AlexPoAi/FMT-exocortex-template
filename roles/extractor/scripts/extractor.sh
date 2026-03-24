@@ -198,7 +198,7 @@ $extra_args"
     local strategy_dir="$WORKSPACE/DS-strategy"
     if [ -d "$strategy_dir/.git" ]; then
         git -C "$strategy_dir" reset --quiet 2>/dev/null || true
-        git -C "$strategy_dir" add inbox/captures.md inbox/extraction-reports/ >> "$LOG_FILE" 2>&1 || true
+        git -C "$strategy_dir" add inbox/captures.md inbox/extraction-reports/ inbox/INBOX-TASKS.md >> "$LOG_FILE" 2>&1 || true
         if ! git -C "$strategy_dir" diff --cached --quiet 2>/dev/null; then
             git -C "$strategy_dir" commit -m "inbox-check: extraction report $DATE" >> "$LOG_FILE" 2>&1 \
                 && log "Committed DS-strategy" \

@@ -1,30 +1,57 @@
 #!/bin/bash
 # chain-report.sh — финальный отчёт по всей цепочке после сессии стратегирования
-# Показывает что прошло по цепочке от творческого конвейера до PACK
-# Сохраняет отчёт в DS-strategy/inbox/extraction-reports/
+# Показывает backlog по knowledge/task/manual-review потокам
 
 SESSION_FILE="${1:-}"
 DS_STRATEGY="$HOME/Github/DS-strategy"
+CREATIV="$HOME/Github/creativ-convector"
 CAPTURES="$DS_STRATEGY/inbox/captures.md"
+INBOX_TASKS="$DS_STRATEGY/inbox/INBOX-TASKS.md"
 PROCESSED="$DS_STRATEGY/inbox/processed-sessions"
+PENDING="$DS_STRATEGY/inbox/pending-sessions"
 REPORTS="$DS_STRATEGY/inbox/extraction-reports"
+MANUAL_REVIEW="$CREATIV/2. Черновики/00-Ручной разбор"
 REPORT_FILE="$REPORTS/$(date +%Y-%m-%d)-chain-report.md"
 
 mkdir -p "$REPORTS"
+: > "$REPORT_FILE"
 
-# Инициализируем файл отчёта
-echo "" > "$REPORT_FILE"
-
-# Пишет и в терминал и в файл
 out() { echo "$1" | tee -a "$REPORT_FILE"; }
+count_md() {
+    local dir="$1"
+    if [ -d "$dir" ]; then
+        find "$dir" -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' '
+    else
+        echo 0
+    fi
+}
+
+pending_sessions=$(count_md "$PENDING")
+processed_sessions=$(count_md "$PROCESSED")
+manual_review_count=$(find "$MANUAL_REVIEW" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+pending_reports=$(grep -l '^status: pending-review' "$REPORTS"/*.md 2>/dev/null | wc -l | tr -d ' ')
+pending_captures=0
+processed_captures=0
+analyzed_captures=0
+all_captures=0
+if [ -f "$CAPTURES" ]; then
+    all_captures=$(grep '^### ' "$CAPTURES" 2>/dev/null | wc -l | tr -d ' ')
+    processed_captures=$(grep '\[processed' "$CAPTURES" 2>/dev/null | wc -l | tr -d ' ')
+    analyzed_captures=$(grep '\[analyzed' "$CAPTURES" 2>/dev/null | wc -l | tr -d ' ')
+    pending_captures=$((all_captures - processed_captures - analyzed_captures))
+    if [ "$pending_captures" -lt 0 ]; then
+        pending_captures=0
+    fi
+fi
+
+today=$(date +%Y-%m-%d)
+tasks_today=$(grep '^## \[Задачи из сессии ' "$INBOX_TASKS" 2>/dev/null | grep "$today" | wc -l | tr -d ' ')
 
 out ""
 out "════════════════════════════════════════════════════════════"
 out "📋 ОТЧЁТ ЦЕПОЧКИ СТРАТЕГИРОВАНИЯ $(date '+%d.%m.%Y %H:%M')"
 out "════════════════════════════════════════════════════════════"
 out ""
-
-# 1. Файл сессии
 out "① ТВОРЧЕСКИЙ КОНВЕЙЕР"
 if [ -n "$SESSION_FILE" ] && [ -f "$SESSION_FILE" ]; then
     fname=$(basename "$SESSION_FILE")
@@ -34,70 +61,61 @@ if [ -n "$SESSION_FILE" ] && [ -f "$SESSION_FILE" ]; then
 else
     last=$(ls -t "$PROCESSED"/*.md 2>/dev/null | head -1)
     if [ -n "$last" ]; then
-        fname=$(basename "$last")
-        out "   ✅ Последняя сессия: $fname"
+        out "   ✅ Последняя сессия: $(basename "$last")"
     else
         out "   ⚠️  Файл сессии не найден"
     fi
 fi
 out ""
-
-# 2. Pending → Processed
-out "② ЭКСТРАКТОР (session-import)"
-processed_count=$(ls "$PROCESSED"/*.md 2>/dev/null | wc -l | tr -d ' ')
-pending_count=$(ls "$DS_STRATEGY/inbox/pending-sessions"/*.md 2>/dev/null | wc -l | tr -d ' ')
-if [ "$processed_count" -gt 0 ]; then
-    out "   ✅ Обработано сессий: $processed_count"
-    ls -t "$PROCESSED"/*.md 2>/dev/null | head -3 | while read f; do
-        out "   → $(basename "$f")"
+out "② ОЧЕРЕДЬ СЕССИЙ (knowledge + tasks)"
+out "   • Pending sessions: $pending_sessions"
+out "   • Processed sessions: $processed_sessions"
+if [ "$pending_sessions" -gt 0 ]; then
+    find "$PENDING" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort | head -5 | while read -r file; do
+        out "   → waiting: $(basename "$file")"
     done
-else
-    out "   ⚠️  Нет обработанных сессий"
-fi
-if [ "$pending_count" -gt 0 ]; then
-    out "   ⏳ В очереди: $pending_count (session-watcher обработает через ~5 мин)"
 fi
 out ""
-
-# 3. Captures в inbox
-out "③ DS-STRATEGY INBOX (captures.md)"
+out "③ KNOWLEDGE STREAM (captures → extraction reports)"
+out "   • Всего captures: $all_captures"
+out "   • Pending captures: $pending_captures"
+out "   • Pending extraction reports: $pending_reports"
 if [ -f "$CAPTURES" ]; then
-    capture_count=$(grep -c "^### " "$CAPTURES" 2>/dev/null || echo 0)
-    out "   ✅ Captures в inbox: $capture_count"
-    grep "^### " "$CAPTURES" 2>/dev/null | sed 's/^### /   → /' | head -10 | while read line; do
+    grep '^### ' "$CAPTURES" 2>/dev/null | head -10 | sed 's/^### /   → /' | while read -r line; do
         out "$line"
     done
-else
-    out "   ⚠️  captures.md не найден"
 fi
 out ""
-
-# 4. Последний отчёт inbox-check
-out "④ ЭКСТРАКТОР (inbox-check → PACK)"
-last_report=$(ls -t "$REPORTS"/*inbox-check*.md 2>/dev/null | head -1)
-if [ -n "$last_report" ]; then
-    rname=$(basename "$last_report")
-    accept=$(grep -c "accept" "$last_report" 2>/dev/null || echo 0)
-    reject=$(grep -c "reject" "$last_report" 2>/dev/null || echo 0)
-    out "   ✅ Последний отчёт: $rname"
-    out "   ✅ Принято: $accept | Отклонено: $reject"
-    grep "CO\." "$last_report" 2>/dev/null | head -5 | while read line; do
+out "④ TASK STREAM (session-tasks → INBOX-TASKS.md)"
+out "   • Секций задач за сегодня: $tasks_today"
+if [ -f "$INBOX_TASKS" ]; then
+    grep -n "\[source: сессия" "$INBOX_TASKS" 2>/dev/null | tail -5 | while read -r line; do
         out "   → $line"
     done
-else
-    out "   ⏳ inbox-check ещё не запускался"
-    out "   Запустить вручную:"
-    out "   bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/claude-run.sh inbox-check"
 fi
 out ""
-
+out "⑤ MANUAL-REVIEW / НЕРАЗОБРАННОЕ"
+out "   • Ручной разбор в creativ-convector: $manual_review_count"
+if [ "$manual_review_count" -gt 0 ]; then
+    find "$MANUAL_REVIEW" -type f -name '*.md' 2>/dev/null | sort | head -10 | while read -r file; do
+        rel_path=${file#"$CREATIV/"}
+        out "   → $rel_path"
+    done
+fi
+out ""
 out "════════════════════════════════════════════════════════════"
 out "✅ ЦЕПОЧКА СТРАТЕГИРОВАНИЯ ЗАВЕРШЕНА"
 out ""
-out "Если что-то не прошло автоматически — ручные команды:"
-out "  Обработать очередь:  bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/claude-run.sh session-watcher"
-out "  Проверить inbox:     bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/claude-run.sh inbox-check"
+out "Инварианты проверки:"
+out "  1. каждая заметка либо в проекте, либо в manual-review, либо в error"
+out "  2. каждая сессия даёт knowledge stream и task stream"
+out "  3. backlog виден по counts, без silent skip"
+out ""
+out "Ручные команды:"
+out "  Обработать очередь:  bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/session-watcher.sh"
+out "  Проверить inbox:     bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/extractor.sh inbox-check"
 out "  Посмотреть captures: cat ~/Github/DS-strategy/inbox/captures.md"
+out "  Посмотреть задачи:   cat ~/Github/DS-strategy/inbox/INBOX-TASKS.md"
 out "  Посмотреть лог:      cat ~/logs/extractor/$(date +%Y-%m-%d).log"
 out "════════════════════════════════════════════════════════════"
 out ""

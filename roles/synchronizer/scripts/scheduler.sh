@@ -308,10 +308,13 @@ run_task() {
     if [ "$exit_code" -eq 0 ]; then
         end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
         summary="completed successfully"
-        mapfile -t evidence_lines < <(collect_task_evidence "$task" "$tmp_out")
-        evidence_status="${evidence_lines[0]:-weak}"
-        evidence_summary="${evidence_lines[1]:-нет подтверждённого evidence}"
-        produced_artifacts="${evidence_lines[2]:-}"
+        local evidence_output
+        evidence_output="$(collect_task_evidence "$task" "$tmp_out")"
+        evidence_status="$(printf '%s\n' "$evidence_output" | sed -n '1p')"
+        evidence_summary="$(printf '%s\n' "$evidence_output" | sed -n '2p')"
+        produced_artifacts="$(printf '%s\n' "$evidence_output" | sed -n '3p')"
+        [ -n "$evidence_status" ] || evidence_status="weak"
+        [ -n "$evidence_summary" ] || evidence_summary="нет подтверждённого evidence"
 
         if [ "$evidence_status" = "verified" ]; then
             write_status "$task" "$RUN_ID" "success" "0" "$summary" "$start_ts" "$end_ts" "$LOG_FILE" "$evidence_status" "$evidence_summary" "" "$(default_staleness_budget_for "$task")" "$produced_artifacts"
