@@ -38,6 +38,18 @@ build_message() {
             printf "<b>🔍 Knowledge Audit завершён</b>\n\n📅 %s\n\nПроверьте лог: ~/logs/extractor/%s.log" "$DATE" "$DATE"
             ;;
 
+        "session-import")
+            printf "<b>📥 Импорт сессии</b>\n\n📅 %s\n\nСессия импортирована в captures.md" "$DATE"
+            ;;
+
+        "session-tasks")
+            printf "<b>📋 Извлечение задач</b>\n\n📅 %s\n\nЗадачи добавлены в INBOX-TASKS.md" "$DATE"
+            ;;
+
+        "archive-review")
+            printf "<b>📚 Обзор архива</b>\n\n📅 %s\n\nАрхив проверен" "$DATE"
+            ;;
+
         *)
             echo ""
             ;;
