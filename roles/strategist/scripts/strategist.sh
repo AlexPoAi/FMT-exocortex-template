@@ -376,6 +376,7 @@ run_claude() {
     local summary
     summary=$(tail -5 "$LOG_FILE" | grep -v '^\[' | head -3)
     notify "Стратег: $command_file" "$summary"
+    notify_telegram "$command_file"
 }
 
 already_ran_today() {
