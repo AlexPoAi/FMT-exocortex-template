@@ -4,6 +4,32 @@
 
 set -euo pipefail
 
+# Предотвращаем сон пока скрипт работает (macOS)
+if [[ "$(uname)" == "Darwin" ]]; then
+    caffeinate -diu -w $$ &
+fi
+
+# macOS не имеет GNU timeout — perl fallback
+if ! command -v timeout &>/dev/null; then
+    timeout() {
+        local duration="$1"; shift
+        perl -e '
+            use POSIX ":sys_wait_h";
+            my $timeout = shift @ARGV;
+            my $pid = fork();
+            if ($pid == 0) { exec @ARGV; die "exec failed: $!"; }
+            eval {
+                local $SIG{ALRM} = sub { kill "TERM", $pid; die "timeout\n"; };
+                alarm $timeout;
+                waitpid($pid, 0);
+                alarm 0;
+            };
+            if ($@ && $@ eq "timeout\n") { waitpid($pid, WNOHANG); exit 124; }
+            exit ($? >> 8);
+        ' "$duration" "$@"
+    }
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 WORKSPACE="$HOME/Github/DS-strategy"
@@ -129,12 +155,12 @@ build_claude_args() {
     printf '%s\n' "${args[@]}"
 }
 
-DAY_CLOSE_TIMEOUT_SECONDS="300"
-MORNING_TIMEOUT_SECONDS="420"
-NOTE_REVIEW_TIMEOUT_SECONDS="420"
-WEEK_REVIEW_TIMEOUT_SECONDS="600"
-SESSION_PREP_TIMEOUT_SECONDS="420"
-DAY_PLAN_TIMEOUT_SECONDS="420"
+DAY_CLOSE_TIMEOUT_SECONDS="600"
+MORNING_TIMEOUT_SECONDS="1800"
+NOTE_REVIEW_TIMEOUT_SECONDS="1800"
+WEEK_REVIEW_TIMEOUT_SECONDS="1800"
+SESSION_PREP_TIMEOUT_SECONDS="1800"
+DAY_PLAN_TIMEOUT_SECONDS="1800"
 
 timeout_for_command() {
     case "$1" in
@@ -157,36 +183,20 @@ run_claude_with_timeout() {
     shift 5
 
     local -a args=("$@")
+    local rc=0
 
     if [ "$timeout_seconds" -le 0 ]; then
-        "$resolved_cli" "${args[@]}" "$prompt_flag" "$prompt_text" > "$output_file" 2>&1
+        "$resolved_cli" "${args[@]}" "$prompt_flag" "$prompt_text" >> "$output_file" 2>&1
         return $?
     fi
 
-    python3 - "$timeout_seconds" "$output_file" "$resolved_cli" "$prompt_flag" "$prompt_text" "${args[@]}" <<'PY'
-import subprocess
-import sys
+    timeout "$timeout_seconds" "$resolved_cli" "${args[@]}" "$prompt_flag" "$prompt_text" >> "$output_file" 2>&1 || rc=$?
 
-try:
-    timeout_seconds = int(sys.argv[1])
-    output_file = sys.argv[2]
-    resolved_cli = sys.argv[3]
-    prompt_flag = sys.argv[4]
-    prompt_text = sys.argv[5]
-    extra_args = sys.argv[6:]
-    cmd = [resolved_cli, *extra_args, prompt_flag, prompt_text]
-    with open(output_file, 'w', encoding='utf-8', errors='replace') as f:
-        try:
-            completed = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, timeout=timeout_seconds)
-            sys.exit(completed.returncode)
-        except subprocess.TimeoutExpired:
-            f.write(f"\nTIMEOUT: strategist scenario exceeded {timeout_seconds}s and was terminated\n")
-            sys.exit(124)
-except Exception as exc:
-    with open(sys.argv[2], 'a', encoding='utf-8', errors='replace') as f:
-        f.write(f"\nTIMEOUT_WRAPPER_ERROR: {exc}\n")
-    sys.exit(125)
-PY
+    if [ $rc -eq 124 ]; then
+        echo "TIMEOUT: strategist scenario exceeded ${timeout_seconds}s and was terminated" >> "$output_file"
+    fi
+
+    return $rc
 }
 
 classify_runtime_failure() {
