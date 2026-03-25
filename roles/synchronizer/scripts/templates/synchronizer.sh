@@ -9,6 +9,22 @@ build_message() {
     local scenario="$1"
 
     case "$scenario" in
+        "daily-report")
+            local report_file="/Users/alexander/Github/DS-strategy/current/SchedulerReport $DATE.md"
+
+            if [ ! -f "$report_file" ]; then
+                echo ""
+                return
+            fi
+
+            local week
+            week=$(grep '^week:' "$report_file" | head -1 | awk '{print $2}')
+
+            printf "<b>📊 Ежедневный отчёт</b>\n\n"
+            printf "📅 %s (%s)\n\n" "$DATE" "$week"
+            printf "Отчёт создан, агенты проверены."
+            ;;
+
         "code-scan")
             local log_file="$LOG_DIR/code-scan-$DATE.log"
 
