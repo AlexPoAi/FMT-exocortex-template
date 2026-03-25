@@ -207,7 +207,7 @@ classify_runtime_failure() {
         return
     fi
 
-    if grep -Eq 'insufficient balance|预扣费额度失败|quota|credit balance|billing' "$tmp_out" 2>/dev/null; then
+    if grep -Eq 'insufficient balance|预扣费额度失败|quota|credit balance|billing|429 Total cost limit|cost limit reached' "$tmp_out" 2>/dev/null; then
         echo "billing_failed"
         return
     fi
