@@ -288,11 +288,8 @@ run_claude() {
         prompt="${prompt//\{\{WAKATIME_WEEK\}\}/$waka_week}"
     fi
 
-    local tmp_out
     local timeout_seconds
-    local run_finished_epoch elapsed_seconds
     local -a claude_args=()
-    tmp_out=$(mktemp)
     while IFS= read -r arg; do
         [ -n "$arg" ] && claude_args+=("$arg")
     done < <(build_claude_args)
@@ -309,43 +306,57 @@ run_claude() {
 
     cd "$WORKSPACE"
     unset CLAUDECODE
-    set +e
-    run_claude_with_timeout "$timeout_seconds" "$tmp_out" "$resolved_cli" "$AI_CLI_PROMPT_FLAG" "$prompt" "${claude_args[@]}"
-    local exit_code=$?
-    set -e
-    cat "$tmp_out" >> "$LOG_FILE"
 
-    local failure_kind=""
-    run_finished_epoch=$(date +%s)
-    elapsed_seconds=$(( run_finished_epoch - run_started_epoch ))
-    if [ $exit_code -ne 0 ]; then
-        failure_kind=$(classify_runtime_failure "$tmp_out")
-        case "$failure_kind" in
-            auth_failed)
-                log "CRITICAL: Auth failed via helper/env/custom API"
-                ;;
-            billing_failed)
-                log "CRITICAL: Billing/quota failure while running $command_file"
-                ;;
-            model_unavailable)
-                log "CRITICAL: Requested Claude model unavailable for current account/runtime"
-                ;;
-            network_failed)
-                log "CRITICAL: Network/API connectivity failure while running $command_file"
-                ;;
-            timed_out)
-                log "CRITICAL: Scenario $command_file exceeded time limit (${timeout_seconds}s)"
-                ;;
-            preflight_failed)
-                log "CRITICAL: Preflight/runtime prerequisites failed while running $command_file"
-                ;;
-        esac
-        log "Scenario result: $command_file status=$failure_kind exit_code=$exit_code elapsed=${elapsed_seconds}s started_at=$run_started_at"
-        notify "⚠️ Экзокортекс: ошибка агента" "strategist/$command_file: $(failure_notification_text "$failure_kind")"
-        notify_telegram "$command_file"
-        rm -f "$tmp_out"
-        return $exit_code
-    fi
+    local tmp_out exit_code failure_kind run_finished_epoch elapsed_seconds
+    local _model_attempt=0
+    while true; do
+        _model_attempt=$(( _model_attempt + 1 ))
+        tmp_out=$(mktemp)
+        set +e
+        run_claude_with_timeout "$timeout_seconds" "$tmp_out" "$resolved_cli" "$AI_CLI_PROMPT_FLAG" "$prompt" "${claude_args[@]}"
+        exit_code=$?
+        set -e
+        cat "$tmp_out" >> "$LOG_FILE"
+
+        run_finished_epoch=$(date +%s)
+        elapsed_seconds=$(( run_finished_epoch - run_started_epoch ))
+        failure_kind=""
+        if [ $exit_code -ne 0 ]; then
+            failure_kind=$(classify_runtime_failure "$tmp_out")
+            if [ "$failure_kind" = "model_unavailable" ] && [ "$_model_attempt" -lt 3 ]; then
+                log "WARN: model_unavailable (attempt $_model_attempt/3), retrying in 60s..."
+                rm -f "$tmp_out"
+                sleep 60
+                continue
+            fi
+            case "$failure_kind" in
+                auth_failed)
+                    log "CRITICAL: Auth failed via helper/env/custom API"
+                    ;;
+                billing_failed)
+                    log "CRITICAL: Billing/quota failure while running $command_file"
+                    ;;
+                model_unavailable)
+                    log "CRITICAL: Requested Claude model unavailable for current account/runtime (all 3 attempts exhausted)"
+                    ;;
+                network_failed)
+                    log "CRITICAL: Network/API connectivity failure while running $command_file"
+                    ;;
+                timed_out)
+                    log "CRITICAL: Scenario $command_file exceeded time limit (${timeout_seconds}s)"
+                    ;;
+                preflight_failed)
+                    log "CRITICAL: Preflight/runtime prerequisites failed while running $command_file"
+                    ;;
+            esac
+            log "Scenario result: $command_file status=$failure_kind exit_code=$exit_code elapsed=${elapsed_seconds}s started_at=$run_started_at"
+            notify "⚠️ Экзокортекс: ошибка агента" "strategist/$command_file: $(failure_notification_text "$failure_kind")"
+            notify_telegram "$command_file"
+            rm -f "$tmp_out"
+            return $exit_code
+        fi
+        break
+    done
 
     rm -f "$tmp_out"
 
