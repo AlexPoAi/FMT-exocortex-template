@@ -33,6 +33,8 @@ if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
     exit 0
 fi
 
+TELEGRAM_MESSAGE_THREAD_ID="${TELEGRAM_MESSAGE_THREAD_ID:-}"
+
 # Отправка в Telegram
 send_telegram() {
     local text="$1"
@@ -45,11 +47,21 @@ send_telegram() {
 
     local json_body
     if [ "$buttons" = "[]" ]; then
-        json_body=$(printf '{"chat_id":"%s","text":%s,"parse_mode":"HTML","disable_web_page_preview":true}' \
-            "$TELEGRAM_CHAT_ID" "$escaped_text")
+        if [ -n "$TELEGRAM_MESSAGE_THREAD_ID" ]; then
+            json_body=$(printf '{"chat_id":"%s","message_thread_id":%s,"text":%s,"parse_mode":"HTML","disable_web_page_preview":true}' \
+                "$TELEGRAM_CHAT_ID" "$TELEGRAM_MESSAGE_THREAD_ID" "$escaped_text")
+        else
+            json_body=$(printf '{"chat_id":"%s","text":%s,"parse_mode":"HTML","disable_web_page_preview":true}' \
+                "$TELEGRAM_CHAT_ID" "$escaped_text")
+        fi
     else
-        json_body=$(printf '{"chat_id":"%s","text":%s,"parse_mode":"HTML","disable_web_page_preview":true,"reply_markup":{"inline_keyboard":%s}}' \
-            "$TELEGRAM_CHAT_ID" "$escaped_text" "$buttons")
+        if [ -n "$TELEGRAM_MESSAGE_THREAD_ID" ]; then
+            json_body=$(printf '{"chat_id":"%s","message_thread_id":%s,"text":%s,"parse_mode":"HTML","disable_web_page_preview":true,"reply_markup":{"inline_keyboard":%s}}' \
+                "$TELEGRAM_CHAT_ID" "$TELEGRAM_MESSAGE_THREAD_ID" "$escaped_text" "$buttons")
+        else
+            json_body=$(printf '{"chat_id":"%s","text":%s,"parse_mode":"HTML","disable_web_page_preview":true,"reply_markup":{"inline_keyboard":%s}}' \
+                "$TELEGRAM_CHAT_ID" "$escaped_text" "$buttons")
+        fi
     fi
 
     local response
