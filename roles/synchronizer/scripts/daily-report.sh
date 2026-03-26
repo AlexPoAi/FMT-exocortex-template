@@ -767,6 +767,6 @@ case "$MODE" in
             log "No changes to commit"
         fi
         log "=== Daily Report Completed ==="
-        "$SCRIPT_DIR/notify.sh" synchronizer daily-report >> "$LOG_FILE" 2>&1 || true
+        "$SCRIPT_DIR/notify.sh" synchronizer daily-report >> "$SCHEDULER_LOG" 2>&1 || true
         ;;
 esac
