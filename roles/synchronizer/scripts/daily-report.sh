@@ -73,11 +73,18 @@ task_reference_ts() {
 task_status_is_current() {
     local task="$1"
     local ref_ts="$2"
-    local ref_date ref_epoch age
+    local ref_date ref_epoch age budget
 
     ref_date=$(printf '%s' "$ref_ts" | cut -d' ' -f1)
 
     case "$task" in
+        strategist-note-review|strategist-week-review)
+            budget="${STALENESS_BUDGET_SEC:-$(default_staleness_budget_for "$task")}"
+            ref_epoch=$(timestamp_to_epoch "$ref_ts")
+            [ "$ref_epoch" -gt 0 ] || return 1
+            age=$(( NOW_EPOCH - ref_epoch ))
+            [ "$age" -lt "$budget" ]
+            ;;
         extractor-inbox-check)
             if ! (( 10#$HOUR >= 7 && 10#$HOUR <= 23 )); then
                 [ "$ref_date" = "$DATE" ]
@@ -224,6 +231,46 @@ check_file_freshness() {
     [ "$ts" -gt 0 ] || return 1
     age=$(( NOW_EPOCH - ts ))
     [ "$age" -le "$budget" ]
+}
+
+latest_glob_mtime() {
+    local pattern="$1"
+    local latest=0
+    local found=false
+    shopt -s nullglob
+    for f in $pattern; do
+        [ -f "$f" ] || continue
+        local ts=0
+        ts=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
+        if [ "$ts" -gt "$latest" ]; then
+            latest="$ts"
+            found=true
+        fi
+    done
+    shopt -u nullglob
+
+    if [ "$found" = false ]; then
+        echo 0
+    else
+        echo "$latest"
+    fi
+}
+
+status_by_latest_glob_ttl() {
+    local pattern="$1"
+    local budget="$2"
+    local latest_ts age
+    latest_ts=$(latest_glob_mtime "$pattern")
+    if [ "$latest_ts" -le 0 ]; then
+        echo "red"
+        return
+    fi
+    age=$(( NOW_EPOCH - latest_ts ))
+    if [ "$age" -le "$budget" ]; then
+        echo "green"
+    else
+        echo "yellow"
+    fi
 }
 
 status_to_verdict() {
@@ -381,6 +428,7 @@ probe_environment() {
     SESSION_WATCHER_STATE="red"
     CHAIN_REPORT_STATE="red"
     GOOGLE_DRIVE_STATE="red"
+    GOOGLE_DRIVE_TTL_SEC=46800
     STRATEGIST_OPERABILITY_STATE="red"
     EXTRACTOR_OPERABILITY_STATE="red"
     MANAGER_COLLECTION_STATE="yellow"
@@ -435,11 +483,7 @@ probe_environment() {
         CHAIN_REPORT_STATE="yellow"
     fi
 
-    if [ -f "$HOME/Github/VK-offee/knowledge-base/sync-reports/sync-$DATE.md" ]; then
-        GOOGLE_DRIVE_STATE="green"
-    elif ls "$HOME/Github/VK-offee/knowledge-base/sync-reports/"sync-*.md >/dev/null 2>&1; then
-        GOOGLE_DRIVE_STATE="yellow"
-    fi
+    GOOGLE_DRIVE_STATE=$(status_by_latest_glob_ttl "$HOME/Github/VK-offee/knowledge-base/sync-reports/"'sync-*.md' "$GOOGLE_DRIVE_TTL_SEC")
 
     load_status "strategist-morning"
     STRATEGIST_OPERABILITY_STATE=$(status_to_verdict "$STATUS")
@@ -679,16 +723,29 @@ EOF
 }
 
 archive_old_reports() {
+    # Атомарная ротация: git mv + немедленный commit — не допускаем разрыва между mv и git
     local count=0
     for old_report in "$REPORT_DIR"/SchedulerReport\ 20*.md; do
         [ -f "$old_report" ] || continue
         local basename
         basename=$(basename "$old_report")
         [[ "$basename" == *"$DATE"* ]] && continue
-        mv "$old_report" "$ARCHIVE_DIR/" 2>/dev/null || true
-        log "Archived: $basename"
+        if ! git -C "$STRATEGY_DIR" mv "$old_report" "$ARCHIVE_DIR/" 2>/dev/null; then
+            log "WARN: git mv failed for $basename — skipping to avoid partial state"
+            continue
+        fi
+        log "Staged for archive: $basename"
         count=$((count + 1))
     done
+
+    if [ "$count" -gt 0 ]; then
+        if ! git -C "$STRATEGY_DIR" commit -m "chore: archive $count SchedulerReport(s) → archive/scheduler-reports [$DATE]" --quiet; then
+            log "ERROR: atomic archive commit failed — rolling back git mv"
+            git -C "$STRATEGY_DIR" reset --quiet HEAD 2>/dev/null || true
+            return 1
+        fi
+        log "Atomically archived and committed $count report(s)"
+    fi
 }
 
 emit_session_open_hook_json() {
@@ -760,8 +817,13 @@ case "$MODE" in
         git add "archive/scheduler-reports/" 2>/dev/null || true
 
         if ! git diff --cached --quiet 2>/dev/null; then
-            git commit -m "auto: scheduler report $DATE" --quiet || log "WARN: commit failed"
-            git push --quiet 2>/dev/null || log "WARN: push failed"
+            if ! git commit -m "auto: scheduler report $DATE" --quiet; then
+                log "ERROR: final commit failed — artifacts written but not committed"
+                exit 1
+            fi
+            if ! git push --quiet 2>/dev/null; then
+                log "WARN: push failed — committed locally but not pushed"
+            fi
             log "Committed and pushed"
         else
             log "No changes to commit"

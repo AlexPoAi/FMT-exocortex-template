@@ -34,6 +34,7 @@ get_role_runner() {
 
 STRATEGIST_SH="$(get_role_runner strategist)"
 EXTRACTOR_SH="$(get_role_runner extractor)"
+CHAIN_REPORT_SH="$HOME/Github/FMT-exocortex-template/roles/extractor/scripts/chain-report.sh"
 
 HOUR=$(date +%H)
 DOW=$(date +%u)
@@ -67,11 +68,18 @@ timestamp_to_epoch() {
 task_status_is_current() {
     local task="$1"
     local ref_ts="$2"
-    local ref_date ref_epoch age
+    local ref_date ref_epoch age budget
 
     ref_date=$(printf '%s' "$ref_ts" | cut -d' ' -f1)
 
     case "$task" in
+        strategist-note-review|strategist-week-review)
+            budget="${STALENESS_BUDGET_SEC:-$(default_staleness_budget_for "$task")}"
+            ref_epoch=$(timestamp_to_epoch "$ref_ts")
+            [ "$ref_epoch" -gt 0 ] || return 1
+            age=$(( NOW - ref_epoch ))
+            [ "$age" -lt "$budget" ]
+            ;;
         extractor-inbox-check)
             if ! (( 10#$HOUR >= 7 && 10#$HOUR <= 23 )); then
                 [ "$ref_date" = "$DATE" ]
