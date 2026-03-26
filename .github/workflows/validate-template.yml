@@ -12,8 +12,50 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run template validator
-        run: bash setup/validate-template.sh .
+      # 1. Нет автор-специфичного контента
+      - name: Check for author-specific content
+        run: |
+          FAIL=0
+          for pattern in "tserentserenov" "PACK-MIM" "aist_bot_newarchitecture" "DS-Knowledge-Index-Tseren"; do
+            count=$(grep -rn "$pattern" . --include="*.md" --include="*.sh" \
+                    --include="*.json" --include="*.plist" --include="*.yaml" 2>/dev/null | wc -l)
+            if [ "$count" -gt 0 ]; then
+              echo "FAIL: Found '$pattern' in $count locations:"
+              grep -rn "$pattern" . --include="*.md" --include="*.sh" \
+                  --include="*.json" --include="*.plist" 2>/dev/null | head -5
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" -eq 0 ] && echo "PASS: No author-specific content"
+          exit $FAIL
+
+      # 2. Нет захардкоженных /Users/ путей
+      - name: Check for hardcoded paths
+        run: |
+          FAIL=0
+          count=$(grep -rn '/Users/' . --include="*.md" --include="*.sh" \
+                  --include="*.json" --include="*.plist" 2>/dev/null | wc -l)
+          if [ "$count" -gt 0 ]; then
+            echo "FAIL: Found /Users/ in $count locations:"
+            grep -rn '/Users/' . --include="*.md" --include="*.sh" 2>/dev/null | head -5
+            FAIL=1
+          fi
+
+          count=$(grep -rn '/opt/homebrew' . --include="*.md" --include="*.sh" \
+                  --include="*.json" --include="*.plist" 2>/dev/null \
+                  | grep -v 'README.md' \
+                  | grep -v 'validate-template.yml' \
+                  | grep -v '/usr/local/bin.*:/opt/homebrew' \
+                  | wc -l)
+          if [ "$count" -gt 0 ]; then
+            echo "FAIL: Found /opt/homebrew in $count locations:"
+            grep -rn '/opt/homebrew' . --include="*.md" --include="*.sh" 2>/dev/null \
+                | grep -v 'README.md' | grep -v 'validate-template.yml' | head -5
+            FAIL=1
+          fi
+
+          [ "$FAIL" -eq 0 ] && echo "PASS: No hardcoded paths"
+          exit $FAIL
 
       # 3. MEMORY.md — скелет
       - name: Check MEMORY.md is skeleton
@@ -35,8 +77,7 @@ jobs:
           FAIL=0
           for f in CLAUDE.md ONTOLOGY.md README.md \
                    memory/MEMORY.md memory/hard-distinctions.md \
-                   memory/protocol-open.md memory/protocol-work.md memory/protocol-close.md \
-                   memory/navigation.md \
+                   memory/roles.md \
                    roles/strategist/scripts/strategist.sh; do
             if [ ! -f "$f" ]; then
               echo "MISSING: $f"
@@ -46,48 +87,17 @@ jobs:
           [ "$FAIL" -eq 0 ] && echo "PASS: All required files present"
           exit $FAIL
 
-      # 5. MCP-конфигурация
-      - name: Check MCP configuration
+      # 5. MCP — серверы подключаются через claude.ai/settings/connectors (не локально)
+      - name: Check MCP documentation
         run: |
-          FAIL=0
-          SETTINGS=".claude/settings.local.json"
-          if [ ! -f "$SETTINGS" ]; then
-            echo "FAIL: $SETTINGS not found"
+          # MCP servers (knowledge-mcp, ddt) are managed through claude.ai connectors
+          # Validate that setup.sh contains instructions for users
+          if grep -q "claude.ai/settings/connectors" setup.sh; then
+            echo "PASS: setup.sh contains MCP connector instructions"
+          else
+            echo "FAIL: setup.sh missing MCP connector instructions"
             exit 1
           fi
-
-          # Check mcpServers section exists
-          if ! python3 -c "import json; d=json.load(open('$SETTINGS')); assert 'mcpServers' in d" 2>/dev/null; then
-            echo "FAIL: mcpServers section missing in $SETTINGS"
-            FAIL=1
-          fi
-
-          # Check all 2 MCP servers are configured
-          for server in knowledge-mcp ddt; do
-            if ! python3 -c "import json; d=json.load(open('$SETTINGS')); assert '$server' in d['mcpServers']" 2>/dev/null; then
-              echo "FAIL: MCP server '$server' missing"
-              FAIL=1
-            fi
-          done
-
-          # Check URLs point to aisystant.workers.dev
-          BAD_URLS=$(python3 << 'PYEOF'
-          import json
-          d = json.load(open(".claude/settings.local.json"))
-          for name, cfg in d.get("mcpServers", {}).items():
-              url = cfg.get("url", "")
-              if "aisystant.workers.dev" not in url:
-                  print(name + ": " + url)
-          PYEOF
-          ) || true
-          if [ -n "$BAD_URLS" ]; then
-            echo "FAIL: MCP URLs not pointing to aisystant.workers.dev:"
-            echo "$BAD_URLS"
-            FAIL=1
-          fi
-
-          [ "$FAIL" -eq 0 ] && echo "PASS: MCP configuration valid (2 servers, correct URLs)"
-          exit $FAIL
 
       # 6. Только допустимые placeholders
       - name: Check placeholders are valid

@@ -1,22 +1,15 @@
 Выполни сценарий Week Review для роли Стратег (R1).
 
 > **Триггер:** Автоматический — Пн 00:00 (полночь Вс→Пн, launchd).
-> Создаёт WeekReport для клуба. Служит входом для session-prep (Пн 4:00).
+> Записывает итоги недели в секцию WeekPlan + создаёт пост для клуба. Служит входом для session-prep (Пн 4:00).
+> **WeekReport как отдельный файл НЕ создаётся** (deprecated 2026-03-25). Итоги — секция в WeekPlan.
 
-> Source-of-truth: DP.AGENT.012-strategist (PACK-digital-platform). Алгоритм полностью описан ниже.
+Источник сценария: {{WORKSPACE_DIR}}/PACK-digital-platform/pack/digital-platform/02-domain-entities/DP.ROLE.012-strategist/scenarios/scheduled/03-week-review.md
 
 ## Контекст
 
 - **WeekPlan:** {{WORKSPACE_DIR}}/DS-strategy/current/WeekPlan W*.md
-- **Шаблон:** см. секцию «Шаблон WeekReport» ниже
-
-### 0. WakaTime — время работы за неделю
-
-> Данные автоматически подставляются из WakaTime API.
-> Включи секцию WakaTime в WeekReport после метрик коммитов.
-> Если данных нет — напиши: «WakaTime: нет данных за неделю».
-
-{{WAKATIME_WEEK}}
+- **Шаблон:** {{WORKSPACE_DIR}}/PACK-digital-platform/pack/digital-platform/02-domain-entities/DP.ROLE.012-strategist/templates/reviews/weekly-review.md
 
 ## Алгоритм
 
@@ -47,40 +40,56 @@ git -C {{WORKSPACE_DIR}}/<repo> log --since="last monday 00:00" --until="today 0
 - Блокеры (если были)
 - Carry-over на следующую неделю
 
+### 3b. Контент-план на следующую неделю
+
+> **Источники:** Content ideas из рубежей работы (`DS-strategy/drafts/draft-list.md`), результаты прошлой недели, backlog из [Стратегии маркетинга §7](../../DS-ecosystem-development/B.Aisystant-Ecosystem/B1.Society/B1.1.Meaning/1.1.2.%20Marketing/Стратегия%20маркетинга%201.1.md).
+
+1. Собери Content ideas, накопленные за неделю (из draft-list.md, captures, Close-отчётов)
+2. Сопоставь с backlog публикаций из Стратегии маркетинга §7
+3. Предложи 2-3 публикации на следующую неделю:
+   - Что адаптировать (источник)
+   - Для кого (сегмент С1/С2/С3)
+   - Куда (Habr / LinkedIn / TG)
+4. Запиши контент-план в секцию «Итоги W{N}» в WeekPlan
+
 ### 4. Формат для клуба
 
 - Используй шаблон `weekly-review.md` (если есть)
 - Добавь хештеги
 - Формат: компактный, читаемый, с метриками
 
-### 5. Сохранение
+### 5. Сохранение итогов в WeekPlan
 
-1. Создай `current/WeekReport W{N} YYYY-MM-DD.md`
-2. Закоммить в DS-strategy
+> **WeekReport как отдельный файл НЕ создаётся.** Итоги записываются в секцию WeekPlan.
 
-### 6. Создать пост для клуба (опционально)
+1. Открой текущий `DS-strategy/current/WeekPlan W{N}*.md`
+2. Найди или создай секцию `## Итоги W{N}` (после frontmatter, перед планом)
+3. Запиши туда: метрики, таблицу по репо, статусы РП, инсайты, carry-over, контент-план
+4. Закоммить в DS-strategy
 
-> Шаг выполняется только если у пользователя настроен Knowledge Index — surface downstream репо для публикаций.
-> Проверь: существует ли директория `{{WORKSPACE_DIR}}/DS-Knowledge-Index-{{GITHUB_USER}}/`?
-> Если нет — пропусти шаг 6 полностью.
+### 6. Создать пост для клуба (авто-публикация)
 
-1. Переключись на **роль Автора (R4)** и на основе WeekReport сформируй пост для клуба.
+> Пост итогов недели публикуется автоматически в Пн 07:14 МСК. Стратег создаёт его сразу со `status: ready`.
 
-   **Обязательно прочитай** `{{WORKSPACE_DIR}}/DS-Knowledge-Index-{{GITHUB_USER}}/CLAUDE.md` — полные инструкции роли Автора:
+1. Переключись на **роль Автора (R4)** и на основе секции «Итоги W{N}» в WeekPlan сформируй пост для клуба.
+
+   **Обязательно прочитай** `{{WORKSPACE_DIR}}/DS-Knowledge-Index/CLAUDE.md` — полные инструкции роли Автора:
    - § 2 — стандарт названий для итогов недели
-   - § 3 — формат поста: аудитория `community`, структура для тега `итоги-недели`
+   - § 3 — формат поста: аудитория `community`, структура для тега `итоги-недели` (4 уровня влияния, голос от первого лица, 400-700 слов)
 
    Стратег отвечает за **данные** (метрики, факты, сравнения). Автор отвечает за **подачу** (голос, структура, стиль).
 
    **Обязательные данные от Стратега → Автору:**
    - Метрики недели (коммиты, completion rate, сравнение с прошлой неделей)
    - Ключевые факты (что реально было сделано)
-   - Carry-over → W{N+1} (из WeekReport, секция «Carry-over»)
-   - Фокус следующей недели (из WeekReport, секция «Следующая неделя»)
+   - Carry-over → W{N+1} (из WeekPlan, секция «Итоги W{N}» → «Carry-over»)
+   - Фокус следующей недели (из WeekPlan, секция «Итоги W{N}» → «Следующая неделя»)
+
+   Автор использует carry-over и фокус для финала поста — «идеи на следующую неделю».
 
    Выбери лучшее название сам (в автоматическом режиме нет пользователя для выбора).
 
-2. Создай файл `{{WORKSPACE_DIR}}/DS-Knowledge-Index-{{GITHUB_USER}}/docs/{YYYY}/{YYYY-MM-DD}-week-review-w{N}.md`
+2. Создай файл `{{WORKSPACE_DIR}}/DS-Knowledge-Index/docs/{YYYY}/{YYYY-MM-DD}-week-review-w{N}.md`
 
 3. Frontmatter:
 
@@ -98,50 +107,93 @@ content_plan: null
 ---
 ```
 
-4. Обнови `{{WORKSPACE_DIR}}/DS-Knowledge-Index-{{GITHUB_USER}}/docs/README.md` — добавь строку в начало текущего месяца
-5. Закоммить и запушь Knowledge Index (git add docs/ && git commit && git push)
+4. Обнови `{{WORKSPACE_DIR}}/DS-Knowledge-Index/docs/README.md` — добавь строку в начало текущего месяца
+5. Закоммить и запушь `DS-Knowledge-Index` (git add docs/ && git commit && git push)
 
-**Шаблон WeekReport:**
+**Шаблон секции «Итоги W{N}» в WeekPlan:**
 
 ```markdown
----
-type: week-report
-week: W{N}
-date: YYYY-MM-DD
-status: final
-agent: Стратег
----
+## Итоги W{N}: DD мес — DD мес YYYY
 
-# WeekReport W{N}: DD мес — DD мес YYYY
-
-## Метрики
+### Метрики
 - **РП:** X/Y завершено (N%)
 - **Коммитов:** N в M репо
 - **Активных дней:** N/7
 
-## По репозиториям
+### По репозиториям
 
 | Репо | Коммиты | Основные изменения |
 |------|---------|-------------------|
 | ... | ... | ... |
 
-## РП
+### РП
 
 | # | РП | Статус | Комментарий |
 |---|-----|--------|-------------|
 | ... | ... | done/partial/⬜ | ... |
 
-## Инсайты
+### Инсайты
 - ...
 
-## Carry-over
+### Carry-over
 - ...
 
----
+### Контент-план W{N+1}
 
-*Создан: YYYY-MM-DD (Week Review)*
+> Источник: Content ideas за неделю + backlog из Стратегии маркетинга §7
+
+| # | Тема | Источник | Сегмент | Канал |
+|---|------|---------|---------|-------|
+| ... | ... | пост/черновик | С1/С2/С3 | Habr/LinkedIn/TG |
 ```
 
+### 7. Запись ссылки на пост в WeekPlan
+
+> **ОБЯЗАТЕЛЬНО.** После создания поста — записать ссылку в WeekPlan текущей недели.
+
+1. Открой текущий `DS-strategy/current/WeekPlan W{N}*.md`
+2. Найди секцию «Контент-план W{N}» (или создай, если нет)
+3. Добавь строку:
+
+```markdown
+**Пост итогов W{N-1}:** [название](https://github.com/{{GITHUB_USER}}/DS-Knowledge-Index/blob/main/docs/{YYYY}/{YYYY-MM-DD}-week-review-w{N-1}.md) — status: ready → авто-публикация Пн 07:14
+```
+
+4. Закоммить вместе с остальными изменениями
+
+> Эта ссылка позволяет: (а) Стратегу в session-prep видеть, какой пост создан, (б) пользователю проверить пост до публикации, (в) day-plan знать, что контент готов.
+
 Результат:
-- WeekReport в `current/` — как вход для session-prep
-- (Опционально) Пост итогов в Knowledge Index со `status: ready`
+- Секция «Итоги W{N}» в WeekPlan — как вход для session-prep
+- Пост итогов в `DS-Knowledge-Index/docs/{YYYY}/` со `status: ready` — авто-публикация Пн 07:14
+- Ссылка на пост в WeekPlan — для отслеживания
+
+### 8. Week Close: обслуживание MEMORY.md
+
+> Дополнительные шаги поверх Week Review. Описаны в `protocol-close.md § Неделя`.
+
+#### 8a. Ротация уроков
+
+Для каждого урока в MEMORY.md → секция «Уроки»:
+1. Применялся за последние 2 недели? (был инцидент, упоминание в Close-отчётах, или урок < 2 недель)
+2. **Да** → оставить
+3. **Нет** → вынести в `memory/lessons-archive.md` (не загружается автоматически)
+4. Цель: ≤15 актуальных уроков в MEMORY.md
+
+#### 8b. Свежая таблица РП
+
+1. Удалить ВСЕ РП прошлой недели W{N-1} из MEMORY.md
+2. Заполнить таблицу W{N} из нового WeekPlan:
+   - in_progress и pending → перенести
+   - done → НЕ переносить (уже в WP-REGISTRY)
+3. Обновить заголовок: `W{N}: DD мар – DD мар`
+
+#### 8c. Аудит memory-файлов
+
+1. Количество: ≤11 файлов? Лишние → объединить или удалить
+2. Лимиты строк:
+   - Справочники (hard-distinctions, navigation, roles, sota) ≤ 100
+   - Протоколы (protocol-*) ≤ 150
+   - MEMORY.md ≤ 100
+3. Устаревшие записи → обновить или удалить
+4. Результат: отчёт «Memory audit: N файлов, M строк суммарно, K обновлено»

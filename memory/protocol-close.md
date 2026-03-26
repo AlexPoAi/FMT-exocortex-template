@@ -1,10 +1,26 @@
-# Протокол Close (Закрытие сессии)
+# Протокол Close (ОРЗ-фрактал)
 
-> **Триггер:** «закрываю сессию», «всё», «закрывай», или РП завершён.
+> **Три масштаба:** Сессия (Quick Close), День (Day Close), Неделя (Week Close).
 > **Источник:** CLAUDE.md § 2 (slim) → этот файл.
-> **«Закрывай» = push сразу без вопросов** (пользователь дал согласие словом).
+> **Принцип:** «не потерять» (сессия) отделено от «навести порядок» (день).
 
 ---
+
+## § Масштаб: Сессия (Quick Close)
+
+> **Триггер:** «закрываю сессию», «всё», «закрывай», или РП завершён.
+> **Роль:** R6 Кодировщик
+> **«Закрывай» = push сразу без вопросов** (пользователь дал согласие словом).
+> **Бюджет:** ~3 мин. Цель — зафиксировать результат и не потерять знание.
+
+### Различение: Quick Close vs Day Close vs Week Close
+
+| | Quick Close (сессия) | Day Close (день) | Week Close (неделя) |
+|---|------|--------|--------|
+| **Цель** | Не потерять | Навести порядок | Ротация и стратегия |
+| **Что пишем** | Итоги + «Осталось» | Итоги дня + «На завтра» | Метрики + carry-over |
+| **Governance** | Только MEMORY.md | Batch: WeekPlan, DayPlan, WP-REGISTRY, Linear, backup | Ротация уроков, свежая таблица MEMORY |
+| **Верификация** | Haiku R23 (context isolation) | Haiku R23 (полный чеклист) | В составе Week Review |
 
 ## Exit Protocol (ОБЯЗАТЕЛЬНО при завершении каждой роли)
 
@@ -14,118 +30,340 @@
 | # | Шаг | Что делать |
 |---|-----|-----------|
 | 1 | **Артефакт** | Зафиксировать результат (коммит, файл, запись) |
-| 2 | **Статус** | Обновить трекер (WeekPlan, WP context, MEMORY.md) |
+| 2 | **Статус** | Обновить трекер (MEMORY.md, WP context) |
 | 3 | **Уведомление** | Сообщить следующему (пользователь, агент, Стратег) |
 
 ---
 
-## Алгоритм Close
+### Алгоритм Quick Close (7 шагов)
 
-### Truthful close contract
+> **Исполнение:** всегда через `/run-protocol close` (пошаговый чеклист, предотвращает пропуск шагов).
+> **Принцип порядка:** «горячий контекст» — механические статусы сразу после commit (пока файлы свежие), содержательные шаги (KE, верификация) — в середине.
 
-`close-task.sh` — это runtime executor закрытия. Он делает только то, что реально автоматизировано в текущем контуре:
-
-0. **Git preflight** по рабочим репозиториям:
-   - проверить blocking git state (`rebase`, `merge`, `index.lock` и т.п.)
-   - dirty repo без блокировки → `pull --rebase --autostash` → `add` → `commit` → `push`
-   - blocking state → truthful warning/error, а не ложный success
-1. **SESSION-CONTEXT** → обновить `DS-strategy/current/SESSION-CONTEXT.md`
-2. **Backup snapshot** → скопировать runtime memory mirror `~/.claude/projects/<slug>/memory/*.md` и корневой `CLAUDE.md` в `DS-strategy/exocortex/`
-3. **Ecosystem sync** → запустить `roles/extractor/scripts/update-ecosystem.sh`, если он доступен
-4. **Second git pass** → повторно закоммитить и запушить изменения, появившиеся из backup/sync, чтобы не оставлять post-close dirty state
-5. **Final verification** → если после этого repo dirty, close считается НЕ завершённым
-
-### Manual / role-level close tasks
-
-Следующие шаги относятся к общему протоколу роли, но **не гарантируются самим `close-task.sh` автоматически**. Их нужно выполнять отдельно, когда они релевантны:
-
-1. **Knowledge Extraction** → прочитай и выполни `roles/extractor/prompts/session-close.md`:
+0. **Pull** → `cd DS-strategy && git pull --rebase`
+1. **Commit + Push** — все изменения зафиксированы
+<!-- YOUR CUSTOM CHECKS HERE -->
+2. **Статусы** (механические, пока файлы «горячие»):
+   - **MEMORY.md** — обновить статус РП (одна строка: `in_progress` / `done`)
+   - **DayPlan** — обновить строку **своего РП** в `DS-strategy/current/DayPlan YYYY-MM-DD.md`. **Scope:** Quick Close обновляет только РП текущей сессии. Полная актуализация всех строк — на Day Close (шаг 2b). **Правило зачёркивания:** зачеркнуть строку даже если РП остаётся in_progress (в WeekPlan он не зачёркивается, пока не done). DayPlan отражает «что сделано сегодня», WeekPlan — «что закрыто на неделе».
+   - **WP-REGISTRY** (при done) — `DS-strategy/docs/WP-REGISTRY.md`: зачеркнуть строку, статус → `~~✅~~ | ~~done~~`. Пропуск = рассинхрон MEMORY vs REGISTRY.
+3. **KE (Knowledge Extraction)** → прочитай и выполни `DS-IT-systems/DS-ai-systems/extractor/prompts/session-close.md`:
    - Собрать отложенные captures + проверить пропущенные
    - Классифицировать → маршрутизировать → формализовать → валидировать
-   - **MCP-проверка:** `knowledge-mcp search` → нет дубликатов в Pack
    - Показать Extraction Report → получить одобрение
    - Применить одобренные (accept → Pack/CLAUDE.md/memory)
-2. Обновить MEMORY.md (статус РП)
-3. Зафиксировать: что сделано, что осталось
-4. Обновить `DS-strategy/current/Plan W{N}...` (статусы РП)
+   - Немедленные captures (CLAUDE.md, repo CLAUDE.md) — применить сразу
+4. **Verification Gate** (VR.M.003 — приёмка WP):
+   - Прочитать WP context file → извлечь критерии готовности
+   - Проверить по verification_class:
+     - **trivial/closed-loop:** автоматический pass (не задерживать Close)
+     - **open-loop:** содержательная проверка → результат в секцию «Что проверить» отчёта
+     - **problem-framing:** полная проверка + пометка «требует приёмки человеком»
+   - Если РП done → verdict обязателен. Если in_progress → skip
+   - Verdict НЕ блокирует Close — записывается в отчёт для решения человека
+4b. **Code Verification** (автотриггер — S56):
+   - Проверить `git diff --name-only` по затронутым репо
+   - Если среди изменённых файлов есть **код** (`.py`, `.ts`, `.sh`, `.sql`, `.yaml`, `.json`) → запустить `/verify code` (sub-agent Верификатор с context isolation)
+   - Если только `.md` файлы → пропустить (верификация кода не нужна)
+   - Если в сессии был **АрхГейт** и после него менялся код → запустить `/verify archgate` вместо `/verify code`
+   - Verdict → в секцию «Что проверить» отчёта
 5. **WP Context File:**
-   - in_progress + ≥2 сессий → обновить `DS-strategy/inbox/WP-{N}-{slug}.md`
-   - done → `mv inbox/WP-{N}-*.md → archive/wp-contexts/` (сразу, не откладывая)
-   - Проверка: РП есть в WeekPlan и MEMORY.md? Нет → добавить
-6. **Незавершённое и идеи:**
-   - Недоделка по РП → context file (секция «Осталось»)
-   - Идея развития системы → `<repo>/MAPSTRATEGIC.md`
-   - Новая задача → `DS-strategy/inbox/captures.md` или fleeting-notes.md
-   - Зерно для поста → `DS-strategy/drafts/draft-list.md`
-7. **Draft-list проверка:**
-   - Были captures в Pack? → Предложить: «Pack обогащён — добавить черновик для поста?»
-   - Обновить draft-list.md если создавались черновики в этой сессии
+   - in_progress → обновить секцию «Осталось» в `DS-strategy/inbox/WP-{N}-{slug}.md`
+   - done → пометить (архивация — на Day Close)
+   - Незавершённое → context file. Идея → `<repo>/MAPSTRATEGIC.md`. Зерно → `DS-strategy/drafts/draft-list.md`
+6. **Отчёт** (5-7 строк) + закоммитить DS-strategy
 
----
+### Чеклист Quick Close
 
-## Шаблон отчёта Close
+- [ ] Всё закоммичено и запушено
+<!-- YOUR CUSTOM CHECKS HERE -->
+- [ ] **Статусы:** MEMORY.md + DayPlan + WP-REGISTRY обновлены (сразу после commit)
+- [ ] KE выполнен, captures применены
+- [ ] Verification Gate пройден (WP + code)
+- [ ] WP Context: «Осталось» записано (или done помечен)
+- [ ] Repo CLAUDE.md проверен (если feat-коммиты)
+- [ ] Отчёт сформирован
+
+### 7. Верификация Quick Close (Haiku R23)
+
+> Запустить sub-agent **Haiku** в роли **R23 Верификатор** (context isolation — VR.SOTA.002).
+> Передать: (1) чеклист Quick Close, (2) отчёт, (3) список изменённых файлов (`git diff --name-only` по затронутым репо).
+> По ❌ — исправить до показа пользователю.
+
+**Исключения** (верификация не запускается):
+- Сессия ≤15 мин
+- Сессия-вопрос без изменений файлов
+
+### Шаблон отчёта Quick Close
 
 ```
 **РП:** #N — [название]
 **Статус:** done / in_progress
+**Класс верификации:** closed-loop / open-loop / problem-framing
 
-**Исполнитель:** A1 Claude Code (модель: Opus / Sonnet / Haiku)
+**Исполнитель:** A1 Claude Code (модель: Opus 4.6 / Sonnet 4.6 / Haiku 4.5)
 **Роли в сессии:**
 - R6 Кодировщик: [что сделал]
-- R5 Архитектор: [АрхГейт / не активирован]
 - R2 Экстрактор: [N кандидатов → куда / не активирован]
-- R1 Стратег: [что обновил / не активирован]
 
 **Сделано:** [итог]
-**Captures:** [N → куда]
+**Captures:** [N → Pack, N → DS docs/, N → IWE root]. «0» только если ничего не записано.
+**Что проверить:** [что требует внимания человека]
 **Git:** закоммичено + запушено ✅
-**Осталось:** ничего / [что]
+<!-- YOUR CUSTOM CHECKS HERE -->
+**Осталось:** ничего / [что — Agent→Agent handoff для следующей сессии]
 ```
 
-> Указывать только активированные роли. Ключевые (R1, R2) — указывать всегда (даже «не активирован»).
-> Основание: DP.D.033 — роль ≠ исполнитель. Claude Code = исполнитель (A1), роли = маски.
-> **Модель:** Указывать конкретную модель сессии — Opus 4.6, Sonnet 4.6 или Haiku 4.5. Пример: `A1 Claude Code (Opus 4.6)`.
+> Указывать только активированные роли. R2 — указывать всегда (даже «не активирован»).
+> Основание: DP.D.033 — роль ≠ исполнитель.
 
 ---
 
-## Чеклист Close
+## § Масштаб: День (Day Close)
 
-### Что гарантирует runtime (`close-task.sh`)
+> **Триггер:** «закрываю день» / «итоги дня»
+> **Роль:** R1 Стратег
+> **Бюджет:** ~10 мин. Включает governance, который не делается на Quick Close.
+> **Формат:** Стратег собирает данные → показывает черновик → пользователь одобряет → запись.
+> **Скрипт:** `day-close.sh` автоматизирует механические шаги (backup, reindex, linear sync).
 
-- [ ] Все изменения закоммичены и запушены
-- [ ] `SESSION-CONTEXT.md` обновлён
-- [ ] Backup snapshot → `DS-strategy/exocortex/` синхронизирован
-- [ ] Generated changes после backup/sync не оставили dirty state
-- [ ] Truthful result banner сформирован
+### Алгоритм Day Close (12 шагов)
 
-### Что проверяется отдельно по ситуации
+> **Исполнение:** всегда через `/run-protocol day-close` (пошаговый чеклист). Day Close длиннее Quick Close — риск пропуска шагов выше.
 
-- [ ] MEMORY.md обновлён (статусы РП)
-- [ ] DS-strategy/current/Plan обновлён
-- [ ] Captures применены
-- [ ] **MCP-проверка:** `knowledge-mcp search` → captures не дублируют существующее в Pack
-- [ ] **Selective Reindex:** Pack изменены? → `selective-reindex.sh`
-- [ ] **Repo CLAUDE.md:** feat-коммиты → новые правила для CLAUDE.md репо?
-- [ ] **WP context:** коммиты реализуют пункт WP-плана → пункт done?
-- [ ] **Draft-list:** Pack обогащён → предложить черновик? Черновики из сессии → draft-list обновлён?
-- [ ] Context file: done → `mv inbox/WP-*.md → archive/wp-contexts/` (сразу при Close)
-- [ ] Отчёт Close сформирован
-- [ ] WP Context File создан/обновлён при ПЕРВОМ Close
+#### 1. Сбор данных
+
+```bash
+for repo in $(ls {{WORKSPACE_DIR}}/); do
+  if [ -d {{WORKSPACE_DIR}}/$repo/.git ]; then
+    commits=$(git -C {{WORKSPACE_DIR}}/$repo log --since="today 00:00" --oneline --no-merges 2>/dev/null)
+    [ -n "$commits" ] && echo "=== $repo ===" && echo "$commits"
+  fi
+done
+```
+
+Сопоставить коммиты с таблицей «На сегодня» из DayPlan → определить статусы.
+
+#### 2. Governance batch (одним проходом)
+
+**2a.** Обновить `DS-strategy/current/Plan W{N}...` (WeekPlan): статусы РП. **Grep по номеру РП** — обновить ВСЕ упоминания.
+
+**2b.** Обновить `DS-strategy/current/DayPlan YYYY-MM-DD.md`: статусы **всех строк** (РП + ad-hoc). Done → зачеркнуть.
+
+**2c.** Обновить `DS-strategy/docs/WP-REGISTRY.md`: статусы + даты.
+
+**2d.** Обновить `DS-strategy/inbox/open-sessions.log`: удалить строки закрытых сессий.
+
+**2e.** Governance-синхронизация: новые репо/сервисы за день? → REPOSITORY-REGISTRY, navigation.md, MAP.002↔PROCESSES.md.
+
+<!-- YOUR CUSTOM CHECKS HERE -->
+
+#### 3. Архивация
+
+- Done WP context files → `mv inbox/WP-{N}-*.md → archive/wp-contexts/`
+- **Done-РП → удалить строку из MEMORY.md** (они уже в WP-REGISTRY и WeekPlan)
+
+> **Правило:** MEMORY.md хранит ТОЛЬКО активные РП (in_progress + pending). Done = удалить.
+
+#### 3b. Lesson Hygiene (гигиена уроков)
+
+> **Симметрия:** Open пишет уроки → Close чистит. Предотвращает раздувание MEMORY.md.
+
+- Просмотреть секцию «Уроки» в MEMORY.md
+- Урок применялся сегодня? → оставить
+- Урок не применялся >1 нед и есть в тематическом файле (`lessons_*.md`)? → удалить из MEMORY.md
+- Новый урок за день? → записать в MEMORY.md (краткая строка) + тематический файл (подробно)
+- Цель: ≤8 уроков в MEMORY.md
+
+#### 4. Автоматические шаги (скрипт `day-close.sh`)
+
+```bash
+# Запуск одной командой:
+{{WORKSPACE_DIR}}/DS-IT-systems/DS-ai-systems/synchronizer/scripts/day-close.sh
+```
+
+Скрипт выполняет:
+- **Linear sync:** `linear-sync.sh` (синхронизация статусов)
+- **Downstream sync:** `update.sh` (reindex + pack-project + template — заменяет отдельный selective-reindex)
+- **Backup:** `memory/ + CLAUDE.md → DS-strategy/exocortex/`
+
+#### 5. Мультипликатор IWE (расчёт)
+
+> **Мультипликатор = Бюджет закрыт / WakaTime.** Показывает, насколько агент-экзоскелет усиливает работу.
+> Пример: WakaTime 10ч 14мин, бюджет закрыт ~21.4h → мультипликатор 2.09x.
+
+**Алгоритм (день):**
+
+1. **WakaTime** — физическое время за день. Источник: WakaTime API или `wakatime --today`.
+2. **Бюджет закрыт** — сумма бюджетных оценок по ВСЕМ РП, над которыми работали сегодня:
+   - done → полный бюджет РП (или пропорционально фазам для зонтичных)
+   - partial (работали, но не закрыли) → % выполнения × бюджет
+   - not started → 0h
+   - Мелкие РП (бюджет «—» / merged / поглощён) → 0.25h (15 мин), не 0
+   - Источник: таблица «План на сегодня» из DayPlan (колонка «Бюджет»)
+3. **Мультипликатор дня** = Бюджет закрыт / WakaTime. Формат: `N.Nx`
+
+**Алгоритм (неделя, при Week Close):**
+
+4. **WakaTime недели** — сумма физического времени за все 7 дней.
+5. **Бюджет закрыт за неделю** — сумма бюджетов ВСЕХ РП, над которыми работали за неделю:
+   - done → полный бюджет (диапазон → среднее: 3-4h → 3.5h)
+   - partial (работали, но не закрыли) → % выполнения × бюджет
+   - Зонтичные → пропорционально фазам
+   - Мелкие (бюджет «—» / merged / поглощён) → 0.25h (15 мин), не 0
+6. **Мультипликатор недели** = Бюджет закрыт за неделю / WakaTime недели. Формат: `N.Nx`
+7. **Средний мультипликатор** = мультипликатор недели (единый расчёт, НЕ среднее дневных)
+
+#### 6. Черновик итогов (показать пользователю)
+
+**а) Обзор:** таблица «что сделано» (РП × статус)
+
+**б) Что нового узнал:** captures в Pack, различения, инсайты, новое из курса.
+
+> Это экзоскелет: агент помогает увидеть, пользователь рефлексирует сам.
+
+**в) Похвала:** что получилось, что было непросто но сделано.
+
+**г) Не забыто?** Стратег проверяет:
+- Незакоммиченные изменения (`git status` по всем репо)
+<!-- YOUR CUSTOM CHECKS HERE -->
+- Незаписанные мысли? (спросить пользователя)
+- Обещания кому-то? (спросить пользователя)
+
+**д) Видео за день:**
+- Если `video.enabled: true` → проверить новые видео
+- Необработанные → перенести в задел на завтра
+
+**е) Draft-list:** Pack обогащён → предложить черновик?
+
+**ж) Задел на завтра** (Agent→Agent handoff: вечерний Стратег → утренний Стратег):
+- С чего начать утром
+- Какой контекст подготовить
+- Незавершённые РП: что именно осталось
+
+#### 7. Согласование
+
+Пользователь читает черновик → корректирует → одобряет.
+
+#### 8. Запись итогов
+
+Дописать секцию «Итоги дня» в `DayPlan YYYY-MM-DD.md`:
+
+```markdown
+---
+
+## Итоги дня
+
+| РП | Что сделано | Статус |
+|----|-------------|--------|
+| #N | ... | done / partial |
+
+**Коммиты:** N в M репо
+
+### Мультипликатор IWE
+
+| Метрика | Значение |
+|---------|----------|
+| **WakaTime (физическое время)** | Xч Yмин |
+| **Бюджет закрыт (оценки РП)** | ~Nh |
+| **Мультипликатор дня** | **N.Nx** |
+
+> Формула: Бюджет закрыт / WakaTime. Показывает усиление от агента-экзоскелета.
+> Недельный мультипликатор считается при Week Close: Σ бюджетов done-РП за неделю / WakaTime за неделю.
+
+**Что нового узнал:** ...
+
+**Похвала:** ...
+
+**Не забыто:** всё чисто / [что осталось]
+
+**Завтра начать с:** ...
+
+*Закрыто: YYYY-MM-DD HH:MM*
+```
+
+#### 9. Закоммитить DS-strategy
+
+#### 10. Верификация по чеклисту (Day Close)
+
+Запустить sub-agent **Haiku** в роли **R23 Верификатор**. Передать: (1) чеклист Day Close, (2) черновик итогов, (3) список обновлённых файлов. По ❌ — исправить до показа пользователю.
+
+**Почему sub-agent:** контекст основного агента загрязнён (VR.SOTA.002 context isolation).
+
+### Чеклист Day Close
+
+- [ ] Все изменения закоммичены и запушены (по всем репо)
+- [ ] MEMORY.md: done-РП удалены, активные актуальны
+- [ ] WP-REGISTRY.md обновлён
+- [ ] WeekPlan обновлён (grep по номерам РП — ВСЕ упоминания)
+- [ ] DayPlan обновлён (статусы ВСЕХ строк: РП + ad-hoc)
+- [ ] open-sessions.log: строки закрытых сессий удалены
+- [ ] Captures за день применены (все Quick Close → KE пройден)
+- [ ] **Синхронизация downstream:** коммиты в Pack/DS → `update.sh` выполнен (reindex + pack-project + template)
+- [ ] **Linear sync:** статусы соответствуют git. **Пост-sync чек:** сравнить кол-во active РП в REGISTRY (незачёркнутые `🔄`+`⏳`) с кол-вом active issues в Linear (не Done/Canceled). Расхождение → ❌ и исправить до продолжения. Скрипт может упасть молча (exit 1 без вывода) — проверять результат, а не факт запуска.
+- [ ] **Repo CLAUDE.md:** feat-коммиты → новые правила?
+- [ ] **WP context:** done → `mv inbox/ → archive/wp-contexts/`
+- [ ] **Lesson Hygiene:** уроки MEMORY.md ≤8, неактуальные → тематические файлы
+- [ ] **Draft-list:** Pack обогащён → черновик предложен?
+- [ ] **Видео:** обработанные помечены (если video.enabled)
+<!-- YOUR CUSTOM CHECKS HERE -->
+- [ ] **Governance:** REPOSITORY-REGISTRY, navigation.md, MAP.002
+- [ ] **Backup:** `day-close.sh` выполнен (backup + reindex + linear)
+- [ ] **Верификация compliance:** /verify запускался сегодня?
+- [ ] **WakaTime + Мультипликатор:** часы, бюджет, остаток недели
+- [ ] Итоги дня записаны в DayPlan
 - [ ] Новое репо → MAPSTRATEGIC.md + Strategy.md
 
-Все runtime-чеки ✅ → `close-task.sh` может завершить задачу. Остальные пункты определяют, закрыта ли роль truthfully на содержательном уровне.
+Все ✅ → «День закрыт.» Иначе — указать, что осталось.
 
-**Исключения:** сессия ≤15 мин, сессия-вопрос без изменений.
+---
+
+## § Масштаб: Неделя (Week Close)
+
+> **Триггер:** автоматический (Пн 00:00) или «закрываю неделю» / «итоги недели».
+> **Роль:** R1 Стратег
+> **Протокол:** `week-review.md` + дополнительные шаги ниже.
+
+### Дополнительные шаги Week Close (поверх Week Review)
+
+> **Исполнение:** через `/run-protocol week-close`. Week Review (`week-review.md`) + шаги ниже.
+
+#### 1. Ротация уроков в MEMORY.md
+
+Для каждого урока в секции «Уроки»:
+- Применялся за последние 2 недели? → оставить
+- Нет → вынести в `memory/lessons-archive.md`
+- Цель: ≤15 актуальных уроков в MEMORY.md
+
+#### 2. Свежая таблица РП
+
+- Удалить ВСЕ РП прошлой недели из MEMORY.md
+- Перенести in_progress и pending в таблицу новой недели W{N+1}
+- Источник: новый WeekPlan (создаётся в session-prep)
+
+#### 3. Ревью операционных правил (DP.M.008 #14)
+
+Запустить `/iwe-rules-review` → отчёт → согласование → обновление DP.M.008 + реализаций.
+
+#### 4. Аудит memory-файлов
+
+- ≤11 файлов? Лишние → объединить или удалить
+- Лимиты: справочники ≤100, протоколы ≤150, реестры ≤200 строк
+- Устаревшие записи → обновить или удалить
 
 ---
 
 ## Владельцы протоколов
 
-> Владелец = роль (DP.D.033). Исполнитель всех ролей: A1 Claude Code (указывать модель: Opus / Sonnet / Haiku).
+> Владелец = роль (DP.D.033). Исполнитель всех ролей: A1 Claude Code (указывать модель).
 
 | Протокол | Роль-владелец | Где описан |
 |----------|---------------|-----------|
-| Open, Work, Close | R6 Кодировщик | CLAUDE.md + protocol-*.md |
+| Open, Work, Close (§ День) | R1 Стратег | protocol-*.md § День |
+| Open, Work, Close (§ Сессия) | R6 Кодировщик | protocol-*.md § Сессия |
+| Quick Close | R6 Кодировщик | protocol-close.md § Сессия |
+| Day Close | R1 Стратег | protocol-close.md § День |
+| Week Close | R1 Стратег | protocol-close.md § Неделя + week-review.md |
 | Session-Close Extraction | R2 Экстрактор | extractor/prompts/session-close.md |
 | On-Demand Extraction | R2 Экстрактор | extractor/prompts/on-demand.md |
 | Bulk Extraction | R2 Экстрактор | extractor/prompts/bulk-extraction.md |
@@ -135,7 +373,6 @@
 | Ontology Sync | R2 Экстрактор | extractor/prompts/ontology-sync.md |
 | Session-Prep | R1 Стратег | strategist/prompts/session-prep.md |
 | Strategy-Session | R1 Стратег | strategist/prompts/strategy-session.md |
-| Day-Plan | R1 Стратег | strategist/prompts/day-plan.md |
+| Day-Plan | R1 Стратег | protocol-open.md § День |
 | Note-Review | R1 Стратег | strategist/prompts/note-review.md |
-| Day-Close | R1 Стратег | strategist/prompts/day-close.md |
 | Week-Review | R1 Стратег | strategist/prompts/week-review.md |
