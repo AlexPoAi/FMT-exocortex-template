@@ -238,16 +238,31 @@ $warnings
 }
 
 archive_old_reports() {
+    # WP-29: атомарная ротация — git mv staged отдельным коммитом,
+    # fallback mv только если git mv упал (файл вне git-дерева).
     local count=0
     for old_report in "$REPORT_DIR"/SchedulerReport\ 20*.md; do
         [ -f "$old_report" ] || continue
         local basename
         basename=$(basename "$old_report")
         [[ "$basename" == *"$DATE"* ]] && continue
-        git -C "$COMMIT_DIR" mv "$old_report" "$ARCHIVE_DIR/" 2>/dev/null || mv "$old_report" "$ARCHIVE_DIR/"
-        log "Archived: $basename"
+        if git -C "$COMMIT_DIR" mv "$old_report" "$ARCHIVE_DIR/" 2>/dev/null; then
+            log "Staged for archive: $basename"
+        else
+            mv "$old_report" "$ARCHIVE_DIR/" 2>/dev/null || { log "WARN: mv failed for $basename — skipping"; continue; }
+            log "Archived (fallback mv): $basename"
+        fi
         count=$((count + 1))
     done
+
+    if [ "$count" -gt 0 ]; then
+        if ! git -C "$COMMIT_DIR" commit -m "chore: archive $count SchedulerReport(s) [$DATE]" --quiet 2>/dev/null; then
+            log "ERROR: atomic archive commit failed — rolling back"
+            git -C "$COMMIT_DIR" reset --quiet HEAD 2>/dev/null || true
+            return 1
+        fi
+        log "Atomically archived and committed $count report(s)"
+    fi
 }
 
 # === Main ===
@@ -274,8 +289,11 @@ else
     done
 
     if ! git diff --cached --quiet 2>/dev/null; then
-        git commit -m "auto: scheduler report $DATE" --quiet
-        git push --quiet 2>/dev/null || log "WARN: push failed"
+        if ! git commit -m "auto: scheduler report $DATE" --quiet; then
+            log "ERROR: final commit failed — artifacts written but not committed"
+            exit 1
+        fi
+        git push --quiet 2>/dev/null || log "WARN: push failed — committed locally but not pushed"
         log "Committed and pushed"
     else
         log "No changes to commit"
