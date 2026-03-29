@@ -47,7 +47,7 @@
    - **MEMORY.md** — обновить статус РП (одна строка: `in_progress` / `done`)
    - **DayPlan** — обновить строку **своего РП** в `DS-strategy/current/DayPlan YYYY-MM-DD.md`. **Scope:** Quick Close обновляет только РП текущей сессии. Полная актуализация всех строк — на Day Close (шаг 2b). **Правило зачёркивания:** зачеркнуть строку даже если РП остаётся in_progress (в WeekPlan он не зачёркивается, пока не done). DayPlan отражает «что сделано сегодня», WeekPlan — «что закрыто на неделе».
    - **WP-REGISTRY** (при done) — `DS-strategy/docs/WP-REGISTRY.md`: зачеркнуть строку, статус → `~~✅~~ | ~~done~~`. Пропуск = рассинхрон MEMORY vs REGISTRY.
-3. **KE (Knowledge Extraction)** → прочитай и выполни `DS-IT-systems/DS-ai-systems/extractor/prompts/session-close.md`:
+3. **KE (Knowledge Extraction)** → прочитай и выполни `FMT-exocortex-template/roles/extractor/prompts/session-close.md`:
    - Собрать отложенные captures + проверить пропущенные
    - Классифицировать → маршрутизировать → формализовать → валидировать
    - Показать Extraction Report → получить одобрение
@@ -179,7 +179,7 @@ done
 
 ```bash
 # Запуск одной командой:
-{{WORKSPACE_DIR}}/DS-IT-systems/DS-ai-systems/synchronizer/scripts/day-close.sh
+{{WORKSPACE_DIR}}/FMT-exocortex-template/scripts/day-close.sh
 ```
 
 Скрипт выполняет:
