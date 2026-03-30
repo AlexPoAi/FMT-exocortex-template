@@ -38,7 +38,7 @@ notify_telegram() {
     if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
         curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
             -d "chat_id=$TELEGRAM_CHAT_ID" \
-            -d "text=🚨 Проверка здоровья экзокортекса\n\n$message\n\nВремя: $TIMESTAMP" \
+            --data-urlencode "text=$message" \
             -d "parse_mode=HTML" > /dev/null 2>&1 || true
     fi
 }
@@ -169,6 +169,20 @@ load_status() {
 
 ERRORS=()
 WARNINGS=()
+STALE=()
+
+# Человекочитаемые имена агентов
+agent_display_name() {
+    case "$1" in
+        strategist-morning)       echo "Утренний брифинг" ;;
+        strategist-note-review)   echo "Ревью заметок" ;;
+        strategist-week-review)   echo "Недельное ревью" ;;
+        synchronizer-code-scan)   echo "Сканер кода" ;;
+        synchronizer-daily-report) echo "Дневной отчёт" ;;
+        extractor-inbox-check)    echo "Проверка inbox" ;;
+        *)                        echo "$1" ;;
+    esac
+}
 
 log "=== Проверка здоровья запущена ==="
 
@@ -205,8 +219,22 @@ for task in strategist-morning strategist-note-review strategist-week-review syn
         success|skipped|running)
             log "ОК: $task status=$STATUS"
             ;;
+        stale)
+            STALE+=("$(agent_display_name "$task")")
+            log "УСТАРЕЛ: $task (норма после перезагрузки)"
+            ;;
         *)
-            WARNINGS+=("🟡 $task: $(printf '%s' "$STATUS" | sed 's/auth_failed/ошибка авторизации/; s/billing_failed/ошибка баланса или квоты/; s/model_unavailable/недоступна запрошенная модель/; s/network_failed/сетевая ошибка API/; s/timed_out/превышен лимит времени/; s/preflight_failed/ошибка предварительной проверки/; s/stale/устаревший статус/; s/failed/ошибка/; s/missing/нет статуса/; s/stale_lock/зависшая блокировка/') (${SUMMARY:-без описания})")
+            human_status=$(printf '%s' "$STATUS" | sed \
+                -e 's/auth_failed/ошибка авторизации/' \
+                -e 's/billing_failed/ошибка баланса или квоты/' \
+                -e 's/model_unavailable/недоступна запрошенная модель/' \
+                -e 's/network_failed/сетевая ошибка API/' \
+                -e 's/timed_out/превышен лимит времени/' \
+                -e 's/preflight_failed/ошибка предварительной проверки/' \
+                -e 's/failed/ошибка запуска/' \
+                -e 's/missing/нет статуса/' \
+                -e 's/stale_lock/зависшая блокировка/')
+            WARNINGS+=("$(agent_display_name "$task") — ${human_status}")
             log "ВНИМАНИЕ: $task status=$STATUS summary=${SUMMARY:-no summary}"
             ;;
     esac
@@ -214,7 +242,7 @@ done
 
 log "=== Проверка здоровья завершена ==="
 
-if [ ${#ERRORS[@]} -eq 0 ] && [ ${#WARNINGS[@]} -eq 0 ]; then
+if [ ${#ERRORS[@]} -eq 0 ] && [ ${#WARNINGS[@]} -eq 0 ] && [ ${#STALE[@]} -eq 0 ]; then
     log "✅ Среда исправна"
     exit 0
 fi
@@ -222,23 +250,33 @@ fi
 if [ ${#ERRORS[@]} -gt 0 ]; then
     log "❌ Найдено ${#ERRORS[@]} критических проблем и ${#WARNINGS[@]} предупреждений"
 else
-    log "⚠️ Найдено ${#WARNINGS[@]} предупреждений"
+    log "⚠️ Найдено ${#WARNINGS[@]} предупреждений, ${#STALE[@]} устаревших"
 fi
 
-MESSAGE=""
+MESSAGE="⚠️ Экзокортекс — $(date '+%H:%M')\n\n"
+
 if [ ${#ERRORS[@]} -gt 0 ]; then
-    MESSAGE+="Критические проблемы:\n\n"
+    MESSAGE+="🔴 Критично (${#ERRORS[@]}):\n"
     for error in "${ERRORS[@]}"; do
-        MESSAGE+="$error\n"
+        MESSAGE+="• ${error}\n"
     done
     MESSAGE+="\n"
 fi
 
 if [ ${#WARNINGS[@]} -gt 0 ]; then
-    MESSAGE+="Предупреждения:\n\n"
+    MESSAGE+="🟡 Требует внимания (${#WARNINGS[@]}):\n"
     for warning in "${WARNINGS[@]}"; do
-        MESSAGE+="$warning\n"
+        MESSAGE+="• ${warning}\n"
     done
+    MESSAGE+="\n"
+fi
+
+if [ ${#STALE[@]} -gt 0 ]; then
+    stale_list=$(printf '%s, ' "${STALE[@]}")
+    stale_list="${stale_list%, }"
+    MESSAGE+="💤 Норма после перезагрузки (${#STALE[@]}):\n"
+    MESSAGE+="${stale_list}\n"
+    MESSAGE+="→ Обновятся при следующем запуске\n"
 fi
 
 notify_macos "Экзокортекс: проверка среды" "Проверь AGENTS-STATUS.md и экран открытия сессии"
