@@ -241,6 +241,19 @@ dispatch() {
         fi
     fi
 
+    # --- Синхронизатор: daily-telegram-report (один раз в день, после 08:00) ---
+    if ! ran_today "synchronizer-telegram-report"; then
+        if (( 10#$HOUR >= 8 )); then
+            log "→ synchronizer daily-telegram-report"
+            if "$SCRIPT_DIR/daily-telegram-report.sh" >> "$LOG_FILE" 2>&1; then
+                mark_done "synchronizer-telegram-report"
+            else
+                log "WARN: daily-telegram-report failed (will retry next dispatch)"
+            fi
+            ran=1
+        fi
+    fi
+
     # --- Экстрактор: inbox-check (каждые 3ч, 07-23) ---
     if (( 10#$HOUR >= 7 && 10#$HOUR <= 23 )); then
         local elapsed
