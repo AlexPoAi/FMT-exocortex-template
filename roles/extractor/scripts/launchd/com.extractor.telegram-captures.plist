@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.extractor.telegram-captures</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>/Users/alexander/Github/FMT-exocortex-template/roles/extractor/scripts/telegram-to-captures.py</string>
+    </array>
+
+    <!-- Постоянный процесс: перезапускать если упал -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/alexander/logs/extractor/telegram-captures.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/alexander/logs/extractor/telegram-captures-error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>/Users/alexander</string>
+    </dict>
+
+    <!-- Throttle: не перезапускать чаще чем раз в 30 сек -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+</dict>
+</plist>
