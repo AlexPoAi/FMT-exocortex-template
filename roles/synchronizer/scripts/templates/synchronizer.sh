@@ -54,6 +54,35 @@ build_message() {
             fi
             ;;
 
+        "day-close")
+            local session_context="$HOME/Github/DS-strategy/current/SESSION-CONTEXT.md"
+            local report_file="$HOME/Github/DS-strategy/current/SchedulerReport $DATE.md"
+
+            if [ ! -f "$session_context" ]; then
+                echo ""
+                return
+            fi
+
+            printf "<b>🔒 Закрытие дня %s</b>\n\n" "$(date +%d.%m)"
+
+            # Что сделано сегодня
+            local today_tasks
+            today_tasks=$(awk "/## Что сделано сегодня \($DATE\)/,/^---$/" "$session_context" | grep "^- ✅" | head -5 | sed 's/^- ✅ \[.*\] /• /' | sed 's/^- ✅/• /')
+
+            if [ -n "$today_tasks" ]; then
+                printf "<b>✅ Что сделано:</b>\n%s\n\n" "$today_tasks"
+            fi
+
+            # Статус системы
+            if [ -f "$report_file" ]; then
+                local status_line
+                status_line=$(grep -E "^## (🟢|🟡|🔴)" "$report_file" | head -1)
+                printf "<b>%s</b>\n\n" "$status_line"
+            fi
+
+            printf "День закрыт. Все изменения сохранены.\n"
+            ;;
+
         *)
             echo ""
             ;;
