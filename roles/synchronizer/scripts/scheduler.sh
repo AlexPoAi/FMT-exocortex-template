@@ -228,6 +228,19 @@ dispatch() {
         fi
     fi
 
+    # --- Синхронизатор: unprocessed-notes-check (после daily-report) ---
+    if ! ran_today "synchronizer-unprocessed-check"; then
+        if ran_today "synchronizer-daily-report"; then
+            log "→ synchronizer unprocessed-notes-check"
+            if "$SCRIPT_DIR/unprocessed-notes-check.sh" >> "$LOG_FILE" 2>&1; then
+                mark_done "synchronizer-unprocessed-check"
+            else
+                log "WARN: unprocessed-notes-check failed (will retry next dispatch)"
+            fi
+            ran=1
+        fi
+    fi
+
     # --- Экстрактор: inbox-check (каждые 3ч, 07-23) ---
     if (( 10#$HOUR >= 7 && 10#$HOUR <= 23 )); then
         local elapsed
