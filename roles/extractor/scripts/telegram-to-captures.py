@@ -167,13 +167,8 @@ def main():
     logger.info(f"captures.md: {CAPTURES_FILE}")
 
     async def handle_note(update: Update, context) -> None:
-        """Обрабатывает команду /note или /заметка."""
+        """Обрабатывает команду /note или /заметка от любого пользователя."""
         if not update.message:
-            return
-
-        # Принимаем только от разрешённого chat_id
-        if update.message.chat_id != allowed_chat_id:
-            logger.warning(f"Сообщение от незнакомого chat_id={update.message.chat_id} — игнорируем")
             return
 
         # Текст после команды
@@ -183,7 +178,9 @@ def main():
             return
 
         date_str = datetime.now().strftime("%Y-%m-%d")
-        logger.info(f"Получена заметка: {text[:80]!r}")
+        user = update.message.from_user
+        username = user.username or user.first_name or "Unknown"
+        logger.info(f"Получена заметка от @{username}: {text[:80]!r}")
 
         if add_capture_to_file(text, date_str):
             # Коммитим в фоне через executor (не блокируем event loop)
