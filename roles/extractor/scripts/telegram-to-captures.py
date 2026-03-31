@@ -147,7 +147,7 @@ def git_commit_and_push() -> bool:
 
 def main():
     from telegram import Update
-    from telegram.ext import Application, MessageHandler, filters
+    from telegram.ext import Application, CommandHandler, filters
 
     # Загружаем конфиг
     config = load_config(CONFIG_FILE)
@@ -166,8 +166,8 @@ def main():
     logger.info(f"Запуск. Слушаем chat_id={allowed_chat_id}")
     logger.info(f"captures.md: {CAPTURES_FILE}")
 
-    async def handle_message(update: Update, context) -> None:
-        """Обрабатывает входящее текстовое сообщение."""
+    async def handle_note(update: Update, context) -> None:
+        """Обрабатывает команду /note или /заметка."""
         if not update.message:
             return
 
@@ -176,13 +176,14 @@ def main():
             logger.warning(f"Сообщение от незнакомого chat_id={update.message.chat_id} — игнорируем")
             return
 
-        text = update.message.text or update.message.caption or ""
+        # Текст после команды
+        text = " ".join(context.args) if context.args else ""
         if not text.strip():
-            logger.info("Пустое сообщение — пропускаем")
+            await update.message.reply_text("Использование: /note текст заметки")
             return
 
         date_str = datetime.now().strftime("%Y-%m-%d")
-        logger.info(f"Получено сообщение: {text[:80]!r}")
+        logger.info(f"Получена заметка: {text[:80]!r}")
 
         if add_capture_to_file(text, date_str):
             # Коммитим в фоне через executor (не блокируем event loop)
@@ -191,7 +192,7 @@ def main():
 
             # Подтверждение пользователю
             await update.message.reply_text(
-                "✅ Добавлено в captures.md\n"
+                "✅ Заметка добавлена в captures.md\n"
                 "Экстрактор обработает при следующем запуске (каждые 3ч)."
             )
         else:
@@ -200,10 +201,10 @@ def main():
     # Строим приложение
     app = Application.builder().token(token).build()
 
-    # Слушаем текстовые сообщения и фото с подписью
-    app.add_handler(MessageHandler(filters.TEXT | filters.CAPTION, handle_message))
+    # Слушаем команды /note и /заметка
+    app.add_handler(CommandHandler(["note", "заметка"], handle_note))
 
-    logger.info("Polling запущен. Ctrl+C для остановки.")
+    logger.info("Polling запущен. Команды: /note, /заметка")
     # run_polling управляет event loop сам — не нужен asyncio.run()
     app.run_polling(drop_pending_updates=True)
 
