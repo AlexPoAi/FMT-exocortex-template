@@ -195,8 +195,17 @@ def main():
         else:
             await update.message.reply_text("❌ Ошибка добавления в captures.md. Смотри логи.")
 
-    # Строим приложение
-    app = Application.builder().token(token).build()
+    # Строим приложение с SOCKS5 прокси через SSH-туннель
+    from telegram.request import HTTPXRequest
+
+    request = HTTPXRequest(
+        proxy="socks5://127.0.0.1:1080",
+        connection_pool_size=8,
+        connect_timeout=10.0,
+        read_timeout=10.0,
+    )
+
+    app = Application.builder().token(token).request(request).build()
 
     # Слушаем команды /note и /заметка
     app.add_handler(CommandHandler(["note", "заметка"], handle_note))
