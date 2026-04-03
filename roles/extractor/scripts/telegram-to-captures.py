@@ -261,7 +261,9 @@ def main():
             app.add_handler(CommandHandler(["note", "zametka"], handle_note))
 
             logger.info("Polling запущен. Команда: /note")
-            app.run_polling(drop_pending_updates=True)
+            # Добавляем retry_after=5, чтобы при обрыве сети (VPN/прокси) бот не падал с ошибкой, а ждал
+            # Используем стандартный polling без кривых аргументов
+            app.run_polling(drop_pending_updates=True, close_loop=False)
             break  # Если run_polling вернулся нормально — выходим
 
         except Exception as e:
