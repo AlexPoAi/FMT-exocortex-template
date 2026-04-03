@@ -89,16 +89,16 @@ def build_application(token: str):
     from telegram.request import HTTPXRequest
     import socket
 
-    proxy_url = "socks5://127.0.0.1:1080"
+    proxy_url = f"socks5://{SOCKS_HOST}:{SOCKS_PORT}"
     use_proxy = False
-    
+
     # Быстрая проверка, жив ли туннель
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(2)
-            if s.connect_ex(('127.0.0.1', 1080)) == 0:
+            if s.connect_ex((SOCKS_HOST, SOCKS_PORT)) == 0:
                 use_proxy = True
-                logger.info("SOCKS5 прокси доступен (127.0.0.1:1080), используем")
+                logger.info(f"SOCKS5 прокси доступен ({SOCKS_HOST}:{SOCKS_PORT}), используем")
     except Exception as e:
         logger.warning(f"Ошибка проверки SOCKS5: {e}")
 
