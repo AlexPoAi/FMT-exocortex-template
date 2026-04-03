@@ -99,24 +99,24 @@ def add_capture_to_file(text: str, date_str: str) -> bool:
 
 
 def git_commit_and_push() -> bool:
-    """Коммитит и пушит captures.md в DS-strategy."""
+    """Коммитит и пушит captures.md в DS-strategy.
+
+    Порядок операций: add → commit → pull --rebase → push.
+    pull делается ПОСЛЕ коммита, чтобы unstaged changes не мешали rebase.
+    """
     import subprocess
 
     date_str = datetime.now().strftime("%Y-%m-%d")
     try:
-        # pull --rebase перед коммитом
-        subprocess.run(
-            ["git", "pull", "--rebase", "origin", "main"],
-            cwd=DS_STRATEGY_DIR,
-            capture_output=True,
-            text=True,
-        )
+        # 1. Добавляем только captures.md (не трогаем другие файлы)
         subprocess.run(
             ["git", "add", "inbox/captures.md"],
             cwd=DS_STRATEGY_DIR,
             check=True,
             capture_output=True,
         )
+
+        # 2. Проверяем — есть ли что коммитить
         result = subprocess.run(
             ["git", "diff", "--cached", "--quiet"],
             cwd=DS_STRATEGY_DIR,
@@ -126,12 +126,25 @@ def git_commit_and_push() -> bool:
             logger.info("Нет изменений для коммита")
             return True
 
+        # 3. Коммитим
         subprocess.run(
             ["git", "commit", "-m", f"telegram-import: новые captures из Telegram [{date_str}]"],
             cwd=DS_STRATEGY_DIR,
             check=True,
             capture_output=True,
         )
+
+        # 4. pull --rebase — после коммита unstaged changes не мешают
+        pull_result = subprocess.run(
+            ["git", "pull", "--rebase", "origin", "main"],
+            cwd=DS_STRATEGY_DIR,
+            capture_output=True,
+            text=True,
+        )
+        if pull_result.returncode != 0:
+            logger.warning(f"pull --rebase предупреждение (продолжаем): {pull_result.stderr.strip()}")
+
+        # 5. Пушим
         subprocess.run(
             ["git", "push", "origin", "main"],
             cwd=DS_STRATEGY_DIR,
@@ -208,7 +221,7 @@ def main():
     app = Application.builder().token(token).request(request).build()
 
     # Слушаем команды /note и /заметка
-    app.add_handler(CommandHandler(["note", "заметка"], handle_note))
+    app.add_handler(CommandHandler(["note", "zametka"], handle_note))
 
     logger.info("Polling запущен. Команды: /note, /заметка")
     # run_polling управляет event loop сам — не нужен asyncio.run()
