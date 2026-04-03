@@ -16,13 +16,19 @@ capture-кандидаты в DS-strategy/inbox/captures.md.
 Автозапуск: через launchd (com.extractor.telegram-captures.plist)
 
 Конфиг: ~/.config/aist/env (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
+
+Устойчивость к сбоям сети:
+- Пробует SOCKS5 прокси (127.0.0.1:1080), при недоступности — напрямую
+- При потере сети ждёт с backoff, не крашится
 """
 
 import asyncio
 import logging
 import os
 import re
+import socket
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -32,6 +38,8 @@ CAPTURES_FILE = Path.home() / "Github" / "DS-strategy" / "inbox" / "captures.md"
 DS_STRATEGY_DIR = Path.home() / "Github" / "DS-strategy"
 LOG_DIR = Path.home() / "logs" / "extractor"
 MARKER = "<!-- Captures добавляются ниже этой строки -->"
+SOCKS_HOST = "127.0.0.1"
+SOCKS_PORT = 1080
 
 # --- Логирование ---
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -59,10 +67,22 @@ def load_config(config_file: Path) -> dict:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            m = re.match(r'^(\w+)=["\']?(.*?)["\']?\s*$', line)
+            m = re.match(r'^(\w+)=["\'](.*?)["\']?\s*$', line)
             if m:
                 config[m.group(1)] = m.group(2)
     return config
+
+
+def is_socks_available() -> bool:
+    """Проверяет доступность SOCKS5 прокси."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        sock.connect((SOCKS_HOST, SOCKS_PORT))
+        sock.close()
+        return True
+    except (socket.error, OSError):
+        return False
 
 
 def add_capture_to_file(text: str, date_str: str) -> bool:
@@ -128,7 +148,7 @@ def git_commit_and_push() -> bool:
 
         # 3. Коммитим
         subprocess.run(
-            ["git", "commit", "-m", f"telegram-import: новые captures из Telegram [{date_str}]"],
+            ["git", "commit", "-m", f"telegram: заметка от @{_last_username or 'user'} [{date_str}]"],
             cwd=DS_STRATEGY_DIR,
             check=True,
             capture_output=True,
@@ -158,9 +178,32 @@ def git_commit_and_push() -> bool:
         return False
 
 
+# Глобальная переменная для имени пользователя в коммите
+_last_username = None
+
+
+def build_application(token: str):
+    """Создаёт Application: пробует SOCKS5, при недоступности — без прокси."""
+    from telegram.ext import Application
+    from telegram.request import HTTPXRequest
+
+    if is_socks_available():
+        logger.info(f"SOCKS5 прокси доступен ({SOCKS_HOST}:{SOCKS_PORT}), используем")
+        request = HTTPXRequest(
+            proxy=f"socks5://{SOCKS_HOST}:{SOCKS_PORT}",
+            connection_pool_size=8,
+            connect_timeout=15.0,
+            read_timeout=15.0,
+        )
+        return Application.builder().token(token).request(request).build()
+    else:
+        logger.warning("SOCKS5 прокси недоступен, пробуем без прокси (напрямую)")
+        return Application.builder().token(token).build()
+
+
 def main():
     from telegram import Update
-    from telegram.ext import Application, CommandHandler, filters
+    from telegram.ext import CommandHandler
 
     # Загружаем конфиг
     config = load_config(CONFIG_FILE)
@@ -180,52 +223,53 @@ def main():
     logger.info(f"captures.md: {CAPTURES_FILE}")
 
     async def handle_note(update: Update, context) -> None:
-        """Обрабатывает команду /note или /заметка от любого пользователя."""
+        """Обрабатывает команду /note от любого пользователя."""
+        global _last_username
         if not update.message:
             return
 
         # Текст после команды
         text = " ".join(context.args) if context.args else ""
         if not text.strip():
-            await update.message.reply_text("Использование: /note текст заметки")
+            await update.message.reply_text("Напишите текст заметки после /note")
             return
 
         date_str = datetime.now().strftime("%Y-%m-%d")
         user = update.message.from_user
-        username = user.username or user.first_name or "Unknown"
-        logger.info(f"Получена заметка от @{username}: {text[:80]!r}")
+        _last_username = user.username or user.first_name or "Unknown"
+        logger.info(f"Получена заметка от @{_last_username}: {text[:80]!r}")
 
         if add_capture_to_file(text, date_str):
             # Коммитим в фоне через executor (не блокируем event loop)
             loop = asyncio.get_running_loop()
             loop.run_in_executor(None, git_commit_and_push)
 
-            # Подтверждение пользователю
             await update.message.reply_text(
-                "✅ Заметка добавлена в captures.md\n"
-                "Экстрактор обработает при следующем запуске (каждые 3ч)."
+                "✅ Заметка сохранена\n"
+                "Экстрактор обработает при следующем запуске."
             )
         else:
-            await update.message.reply_text("❌ Ошибка добавления в captures.md. Смотри логи.")
+            await update.message.reply_text("❌ Ошибка сохранения. Попробуйте позже.")
 
-    # Строим приложение с SOCKS5 прокси через SSH-туннель
-    from telegram.request import HTTPXRequest
+    # --- Retry loop: при ошибке сети ждём и пробуем заново ---
+    max_backoff = 300  # 5 минут макс
+    backoff = 10
 
-    request = HTTPXRequest(
-        proxy="socks5://127.0.0.1:1080",
-        connection_pool_size=8,
-        connect_timeout=10.0,
-        read_timeout=10.0,
-    )
+    while True:
+        try:
+            app = build_application(token)
+            app.add_handler(CommandHandler(["note", "zametka"], handle_note))
 
-    app = Application.builder().token(token).request(request).build()
+            logger.info("Polling запущен. Команда: /note")
+            app.run_polling(drop_pending_updates=True)
+            break  # Если run_polling вернулся нормально — выходим
 
-    # Слушаем команды /note и /заметка
-    app.add_handler(CommandHandler(["note", "zametka"], handle_note))
-
-    logger.info("Polling запущен. Команды: /note, /заметка")
-    # run_polling управляет event loop сам — не нужен asyncio.run()
-    app.run_polling(drop_pending_updates=True)
+        except Exception as e:
+            logger.error(f"Бот упал: {e.__class__.__name__}: {e}")
+            logger.info(f"Ждём {backoff} сек перед перезапуском...")
+            time.sleep(backoff)
+            backoff = min(backoff * 2, max_backoff)
+            logger.info("Перезапуск бота...")
 
 
 if __name__ == "__main__":
