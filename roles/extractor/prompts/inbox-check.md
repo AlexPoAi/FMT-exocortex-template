@@ -133,6 +133,29 @@ remaining: M
 | Осталось в inbox | M |
 ```
 
+### Шаг 3b: Создать задачи в INBOX-TASKS для каждого accept-кандидата
+
+После генерации отчёта — для каждого кандидата с вердиктом `accept` добавь задачу в `/Users/alexander/Github/DS-strategy/inbox/INBOX-TASKS.md`.
+
+**Где добавить:** в начало файла, сразу после frontmatter (перед первой задачей).
+
+**Формат задачи:**
+
+```markdown
+- [pending] {YYYY-MM-DD}: [KE] Применить: {заголовок кандидата}
+  - Контекст: Extraction report {YYYY-MM-DD}, кандидат #{N}
+  - Репо: {репо} → {путь к файлу}
+  - Действие: {create file / add section}
+  - Приоритет: medium
+  - Бюджет: 15 мин
+  - Готовый текст: см. `DS-strategy/inbox/extraction-reports/{YYYY-MM-DD}-inbox-check.md` → Кандидат #{N}
+```
+
+**Важно:**
+- Добавляй ТОЛЬКО для `accept`. Reject и defer — пропускать.
+- Не дублируй: если задача с таким репо+файлом уже есть в INBOX-TASKS → пропусти.
+- Тег `[KE]` в названии — маркер задач Knowledge Extractor.
+
 ### Шаг 4: Пометить captures как проанализированные
 
 В `DS-strategy/inbox/captures.md` — для каждого проанализированного capture добавь метку `[analyzed YYYY-MM-DD]` к заголовку:
