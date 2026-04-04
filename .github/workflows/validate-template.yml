@@ -18,7 +18,10 @@ jobs:
           FAIL=0
           for pattern in "tserentserenov" "PACK-MIM" "aist_bot_newarchitecture" "DS-Knowledge-Index-Tseren"; do
             count=$(grep -rn "$pattern" . --include="*.md" --include="*.sh" \
-                    --include="*.json" --include="*.plist" --include="*.yaml" 2>/dev/null | wc -l)
+                    --include="*.json" --include="*.plist" --include="*.yaml" 2>/dev/null \
+                    | grep -v "setup/validate-template.sh" \
+                    | grep -v ".github/workflows/validate-template.yml" \
+                    | wc -l)
             if [ "$count" -gt 0 ]; then
               echo "FAIL: Found '$pattern' in $count locations:"
               grep -rn "$pattern" . --include="*.md" --include="*.sh" \
