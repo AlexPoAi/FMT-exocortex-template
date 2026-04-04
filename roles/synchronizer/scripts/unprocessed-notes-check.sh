@@ -17,6 +17,7 @@ STATE_DIR="$HOME/.local/state/exocortex"
 ENV_FILE="$HOME/.config/aist/env"
 LEGACY_TOKEN_FILE="$HOME/.config/exocortex/telegram-token"
 LEGACY_CHAT_ID_FILE="$HOME/.config/exocortex/telegram-chat-id"
+NOTIFY_SCRIPT="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh"
 
 mkdir -p "$STATE_DIR"
 
@@ -158,11 +159,11 @@ if (( red_count > 0 )); then
     fi
 
     if [ -n "$token" ] && [ -n "$chat_id" ]; then
-        printf -v msg '🔴 *Необработанные заметки*\n\nНайдено %s заметок старше 3 дней в Obsidian.\n\nДействие: проверить и распределить вручную.' "$red_count"
-        curl -s -X POST "https://api.telegram.org/bot$token/sendMessage" \
-                -d "chat_id=$chat_id" \
-                --data-urlencode "text=$msg" \
-                -d "parse_mode=Markdown" >/dev/null 2>&1 || true
+        if [ -x "$NOTIFY_SCRIPT" ]; then
+            "$NOTIFY_SCRIPT" synchronizer unprocessed-notes-check >/dev/null 2>&1 || true
+        else
+            log "WARN: notify.sh not found or not executable: $NOTIFY_SCRIPT"
+        fi
     else
         log "WARN: Telegram alert skipped — token/chat_id не найдены ни в ~/.config/aist/env, ни в legacy ~/.config/exocortex/"
     fi

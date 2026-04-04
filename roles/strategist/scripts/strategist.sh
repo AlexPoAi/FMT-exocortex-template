@@ -277,10 +277,12 @@ case "$1" in
             if [ -f "$ENV_FILE" ]; then
                 set -a; source "$ENV_FILE"; set +a
                 ALERT_TEXT="⚠️ <b>Note-Review canary</b>: Step 10 не сработал ($BOLD_NEW_BEFORE → $BOLD_NEW_AFTER new bold). Deterministic cleanup applied."
-                ALERT_JSON=$(printf '%s' "$ALERT_TEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
-                curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"chat_id\":\"${TELEGRAM_CHAT_ID}\",\"text\":${ALERT_JSON},\"parse_mode\":\"HTML\"}" >> "$LOG_FILE" 2>&1 || true
+                if ! NOTIFY_TEXT="$ALERT_TEXT" "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist note-review-canary >> "$LOG_FILE" 2>&1; then
+                    ALERT_JSON=$(printf '%s' "$ALERT_TEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+                    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                        -H "Content-Type: application/json" \
+                        -d "{\"chat_id\":\"${TELEGRAM_CHAT_ID}\",\"text\":${ALERT_JSON},\"parse_mode\":\"HTML\"}" >> "$LOG_FILE" 2>&1 || true
+                fi
             fi
         fi
 

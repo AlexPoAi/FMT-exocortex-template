@@ -4,6 +4,15 @@
 
 LOG_DIR="{{HOME_DIR}}/logs/synchronizer"
 DATE=$(date +%Y-%m-%d)
+STRATEGY_DIR="{{WORKSPACE_DIR}}/DS-strategy"
+if [[ "$STRATEGY_DIR" == *"{{WORKSPACE_DIR}}"* ]]; then
+    STRATEGY_DIR="$HOME/Github/DS-strategy"
+fi
+
+AGENT_WORKSPACE_DIR="{{WORKSPACE_DIR}}/DS-agent-workspace"
+if [[ "$AGENT_WORKSPACE_DIR" == *"{{WORKSPACE_DIR}}"* ]]; then
+    AGENT_WORKSPACE_DIR="$HOME/Github/DS-agent-workspace"
+fi
 
 build_message() {
     local scenario="$1"
@@ -51,6 +60,78 @@ build_message() {
 
             if [ "$found" -gt 0 ]; then
                 printf "<b>Репо:</b>\n%s" "$repo_list"
+            fi
+            ;;
+
+        "daily-telegram-report")
+            local status_file="$STRATEGY_DIR/current/AGENTS-STATUS.md"
+            local wp_file
+            wp_file=$(ls -t "$STRATEGY_DIR"/current/WeekPlan\ *.md 2>/dev/null | head -1)
+            local hired=0
+
+            if [ -d "$AGENT_WORKSPACE_DIR/agency/agents" ]; then
+                hired=$(ls "$AGENT_WORKSPACE_DIR/agency/agents/" 2>/dev/null | wc -l | tr -d ' ')
+            fi
+
+            printf "<b>📊 Ежедневный отчёт экзокортекса</b>\n\n"
+
+            if [ -f "$status_file" ]; then
+                local status_lines
+                status_lines=$(grep "🟢\|🟡\|🔴" "$status_file" | head -10 | sed 's/^/• /')
+                if [ -n "$status_lines" ]; then
+                    printf "<b>Статус агентов:</b>\n%s\n\n" "$status_lines"
+                fi
+            fi
+
+            if [ -n "$wp_file" ] && [ -f "$wp_file" ]; then
+                local wp_count
+                wp_count=$(grep "in_progress\|pending" "$wp_file" | wc -l | tr -d ' ')
+                printf "<b>Рабочие продукты:</b>\n• В работе: %s\n\n" "$wp_count"
+            fi
+
+            printf "<b>Нанятые агенты:</b>\n• Из агентства: %s\n\n" "$hired"
+            printf "⏰ Время: %s" "$(date '+%H:%M')"
+            ;;
+
+        "unprocessed-notes-check")
+            local report_file="$STRATEGY_DIR/current/UNPROCESSED-NOTES-REPORT.md"
+
+            if [ ! -f "$report_file" ]; then
+                echo ""
+                return
+            fi
+
+            local red_count yellow_count green_count
+            red_count=$(grep '🔴 Требует внимания' "$report_file" | awk -F'|' '{print $3}' | xargs 2>/dev/null || echo "0")
+            yellow_count=$(grep '🟡 В работе' "$report_file" | awk -F'|' '{print $3}' | xargs 2>/dev/null || echo "0")
+            green_count=$(grep '🟢 Обработано' "$report_file" | awk -F'|' '{print $3}' | xargs 2>/dev/null || echo "0")
+
+            printf "<b>🔴 Необработанные заметки</b>\n\n"
+            printf "Найдено %s заметок старше 3 дней в Obsidian.\n\n" "$red_count"
+            printf "<b>Статистика:</b>\n"
+            printf "• 🟢 Обработано: %s\n" "${green_count:-0}"
+            printf "• 🟡 В работе: %s\n" "${yellow_count:-0}"
+            printf "• 🔴 Требует внимания: %s\n\n" "${red_count:-0}"
+            printf "Действие: проверить и распределить вручную."
+            ;;
+
+        "health-check")
+            if [ -n "${NOTIFY_TEXT:-}" ]; then
+                printf "%s" "${NOTIFY_TEXT}"
+            elif [ -n "${NOTIFY_TEXT_FILE:-}" ] && [ -f "${NOTIFY_TEXT_FILE}" ]; then
+                cat "${NOTIFY_TEXT_FILE}"
+            else
+                echo ""
+            fi
+            ;;
+
+        "token-report")
+            if [ -n "${NOTIFY_TEXT:-}" ]; then
+                printf "%s" "${NOTIFY_TEXT}"
+            elif [ -n "${NOTIFY_TEXT_FILE:-}" ] && [ -f "${NOTIFY_TEXT_FILE}" ]; then
+                cat "${NOTIFY_TEXT_FILE}"
+            else
+                echo ""
             fi
             ;;
 

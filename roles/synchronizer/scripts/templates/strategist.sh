@@ -62,6 +62,16 @@ get_github_link() {
 
 build_message() {
     local scenario="$1"
+
+    if [ "$scenario" = "note-review-canary" ]; then
+        if [ -n "${NOTIFY_TEXT:-}" ]; then
+            printf "%s" "${NOTIFY_TEXT}"
+        else
+            echo ""
+        fi
+        return
+    fi
+
     local file
     file=$(find_strategy_file "$scenario")
 

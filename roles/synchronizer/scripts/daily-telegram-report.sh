@@ -15,6 +15,7 @@ LOG_DIR="$HOME/logs/synchronizer"
 ENV_FILE="$HOME/.config/aist/env"
 LEGACY_TOKEN_FILE="$HOME/.config/exocortex/telegram-token"
 LEGACY_CHAT_ID_FILE="$HOME/.config/exocortex/telegram-chat-id"
+NOTIFY_SCRIPT="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh"
 
 mkdir -p "$STATE_DIR"
 
@@ -87,47 +88,18 @@ get_hired_agents() {
     fi
 }
 
-# Построить сообщение
-build_message() {
-    local msg="📊 *Ежедневный отчёт экзокортекса*\n\n"
-
-    msg+="🤖 *Статус агентов:*\n"
-    msg+="$(get_agent_status | sed 's/^/• /')\n\n"
-
-    local wp_count=$(get_workplan_status)
-    msg+="📋 *Рабочие продукты:*\n"
-    msg+="• В работе: $wp_count\n\n"
-
-    local hired=$(get_hired_agents)
-    msg+="👥 *Нанятые агенты:*\n"
-    msg+="• Из агентства: $hired\n\n"
-
-    msg+="⏰ *Время:* $(date '+%H:%M')\n"
-
-    echo -e "$msg"
-}
-
-# Отправить в Telegram
-send_telegram() {
-    local msg="$1"
-
-    curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
-        -d "chat_id=$CHAT_ID" \
-        -d "text=$msg" \
-        -d "parse_mode=Markdown" >/dev/null 2>&1
-
-    if [ $? -eq 0 ]; then
-        log "Отчёт отправлен в Telegram"
-        touch "$STATE_DIR/telegram-report-$TODAY"
-        return 0
-    else
-        log "ERROR: Ошибка отправки в Telegram"
-        return 1
-    fi
-}
-
 # Основной процесс
-msg=$(build_message)
-send_telegram "$msg"
+if [ ! -x "$NOTIFY_SCRIPT" ]; then
+    log "ERROR: notify.sh not found or not executable: $NOTIFY_SCRIPT"
+    exit 1
+fi
+
+if "$NOTIFY_SCRIPT" synchronizer daily-telegram-report >/dev/null 2>&1; then
+    log "Отчёт отправлен в Telegram"
+    touch "$STATE_DIR/telegram-report-$TODAY"
+else
+    log "ERROR: Ошибка отправки в Telegram через notify.sh"
+    exit 1
+fi
 
 exit 0
