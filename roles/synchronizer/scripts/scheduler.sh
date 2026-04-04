@@ -162,10 +162,15 @@ dispatch() {
     # --- Стратег: morning (04:00-21:59) ---
     if (( 10#$HOUR >= 4 && 10#$HOUR < 22 )) && ! ran_today "strategist-morning"; then
         log "→ strategist morning (catch-up: hour=$HOUR)"
-        if "$STRATEGIST_SH" morning >> "$LOG_FILE" 2>&1; then
+        "$STRATEGIST_SH" morning >> "$LOG_FILE" 2>&1
+        _rc=$?
+        if [ "$_rc" -eq 0 ]; then
             mark_done "strategist-morning"
+        elif [ "$_rc" -eq 2 ]; then
+            log "INFO: strategist morning — уже выполняется (lock), ждём завершения"
+            # exit 2 = SKIP (lock exists), не ошибка — не помечаем done, повторим следующий dispatch
         else
-            log "WARN: strategist morning failed (will retry next dispatch)"
+            log "WARN: strategist morning failed (exit $_rc, will retry next dispatch)"
         fi
         ran=1
     fi
