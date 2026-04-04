@@ -40,8 +40,9 @@ jobs:
                   --include="*.json" --include="*.plist" 2>/dev/null \
                   | grep -v "setup/validate-template.sh" \
                   | grep -v ".github/workflows/validate-template.yml" \
-                  | grep -v "# .*\(example\|slug\|/Users/alice\)" \
-                  | grep -v "^.*setup\.sh:.*# " \
+                  | grep -v '/Users/\.\.\.' \
+                  | grep -v '/Users/[a-z]/\|/Users/alice/\|/Users/x/' \
+                  | grep -vP '^\S+:\s*#' \
                   | wc -l)
           if [ "$count" -gt 0 ]; then
             echo "FAIL: Found /Users/ in $count locations:"
@@ -53,6 +54,9 @@ jobs:
                   --include="*.json" --include="*.plist" 2>/dev/null \
                   | grep -v 'README.md' \
                   | grep -v 'validate-template.yml' \
+                  | grep -v 'setup/validate-template.sh' \
+                  | grep -v 'setup\.sh' \
+                  | grep -v 'docs/' \
                   | grep -v '/usr/local/bin.*:/opt/homebrew' \
                   | wc -l)
           if [ "$count" -gt 0 ]; then

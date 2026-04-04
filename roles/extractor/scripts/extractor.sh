@@ -10,7 +10,7 @@ WORKSPACE="{{HOME_DIR}}/Github"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="{{HOME_DIR}}/logs/extractor"
 ENV_FILE="{{HOME_DIR}}/.config/aist/env"
-DEFAULT_CLAUDE_PATH="/opt/homebrew/bin/claude"
+DEFAULT_CLAUDE_PATH="${CLAUDE_PATH:-$(command -v claude 2>/dev/null || echo /usr/local/bin/claude)}"
 
 AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
 AI_CLI_MODEL="${AI_CLI_MODEL:-}"
