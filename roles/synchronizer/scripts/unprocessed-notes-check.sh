@@ -14,6 +14,9 @@ set -euo pipefail
 CONVECTOR_DIR="$HOME/Github/creativ-convector"
 REPORT_FILE="$HOME/Github/DS-strategy/current/UNPROCESSED-NOTES-REPORT.md"
 STATE_DIR="$HOME/.local/state/exocortex"
+ENV_FILE="$HOME/.config/aist/env"
+LEGACY_TOKEN_FILE="$HOME/.config/exocortex/telegram-token"
+LEGACY_CHAT_ID_FILE="$HOME/.config/exocortex/telegram-chat-id"
 
 mkdir -p "$STATE_DIR"
 
@@ -134,18 +137,34 @@ log "Отчёт сохранён: $REPORT_FILE"
 if (( red_count > 0 )); then
     log "ALERT: Найдено $red_count необработанных заметок (>3 дней)"
 
-    # Отправить в Telegram (если токен настроен)
-    if [ -f "$HOME/.config/exocortex/telegram-token" ]; then
-        token=$(cat "$HOME/.config/exocortex/telegram-token")
-        chat_id=$(cat "$HOME/.config/exocortex/telegram-chat-id" 2>/dev/null || echo "")
+    # Отправить в Telegram:
+    # основной источник — ~/.config/aist/env
+    # fallback на legacy ~/.config/exocortex/* оставляем на переходный период
+    if [ -f "$ENV_FILE" ]; then
+        set -a
+        source "$ENV_FILE"
+        set +a
+    fi
 
-        if [ -n "$chat_id" ]; then
-            msg="🔴 *Необработанные заметки*\n\nНайдено $red_count заметок старше 3 дней в Obsidian.\n\nДействие: проверить и распределить вручную."
-            curl -s -X POST "https://api.telegram.org/bot$token/sendMessage" \
+    token="${TELEGRAM_BOT_TOKEN:-}"
+    chat_id="${TELEGRAM_CHAT_ID:-}"
+
+    if [ -z "$token" ] && [ -f "$LEGACY_TOKEN_FILE" ]; then
+        token=$(cat "$LEGACY_TOKEN_FILE")
+    fi
+
+    if [ -z "$chat_id" ] && [ -f "$LEGACY_CHAT_ID_FILE" ]; then
+        chat_id=$(cat "$LEGACY_CHAT_ID_FILE" 2>/dev/null || echo "")
+    fi
+
+    if [ -n "$token" ] && [ -n "$chat_id" ]; then
+        printf -v msg '🔴 *Необработанные заметки*\n\nНайдено %s заметок старше 3 дней в Obsidian.\n\nДействие: проверить и распределить вручную.' "$red_count"
+        curl -s -X POST "https://api.telegram.org/bot$token/sendMessage" \
                 -d "chat_id=$chat_id" \
-                -d "text=$msg" \
+                --data-urlencode "text=$msg" \
                 -d "parse_mode=Markdown" >/dev/null 2>&1 || true
-        fi
+    else
+        log "WARN: Telegram alert skipped — token/chat_id не найдены ни в ~/.config/aist/env, ни в legacy ~/.config/exocortex/"
     fi
 fi
 

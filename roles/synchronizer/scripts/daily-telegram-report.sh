@@ -12,6 +12,9 @@ STRATEGY_DIR="$HOME/Github/DS-strategy"
 AGENT_WORKSPACE="$HOME/Github/DS-agent-workspace"
 STATE_DIR="$HOME/.local/state/exocortex"
 LOG_DIR="$HOME/logs/synchronizer"
+ENV_FILE="$HOME/.config/aist/env"
+LEGACY_TOKEN_FILE="$HOME/.config/exocortex/telegram-token"
+LEGACY_CHAT_ID_FILE="$HOME/.config/exocortex/telegram-chat-id"
 
 mkdir -p "$STATE_DIR"
 
@@ -26,17 +29,33 @@ if [ -f "$STATE_DIR/telegram-report-$TODAY" ]; then
     exit 0
 fi
 
-# Получить токен и chat_id
-if [ ! -f "$HOME/.config/exocortex/telegram-token" ]; then
-    log "ERROR: Telegram token не найден"
+# Получить токен и chat_id:
+# основной источник — ~/.config/aist/env
+# fallback на legacy ~/.config/exocortex/* оставляем на переходный период
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
+TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+CHAT_ID="${TELEGRAM_CHAT_ID:-}"
+
+if [ -z "$TOKEN" ] && [ -f "$LEGACY_TOKEN_FILE" ]; then
+    TOKEN=$(cat "$LEGACY_TOKEN_FILE")
+fi
+
+if [ -z "$CHAT_ID" ] && [ -f "$LEGACY_CHAT_ID_FILE" ]; then
+    CHAT_ID=$(cat "$LEGACY_CHAT_ID_FILE" 2>/dev/null || echo "")
+fi
+
+if [ -z "$TOKEN" ]; then
+    log "ERROR: Telegram token не найден ни в ~/.config/aist/env, ни в legacy ~/.config/exocortex/"
     exit 1
 fi
 
-TOKEN=$(cat "$HOME/.config/exocortex/telegram-token")
-CHAT_ID=$(cat "$HOME/.config/exocortex/telegram-chat-id" 2>/dev/null || echo "")
-
 if [ -z "$CHAT_ID" ]; then
-    log "ERROR: Telegram chat_id не найден"
+    log "ERROR: Telegram chat_id не найден ни в ~/.config/aist/env, ни в legacy ~/.config/exocortex/"
     exit 1
 fi
 
@@ -50,9 +69,10 @@ get_agent_status() {
 
 # Собрать РП в работе
 get_workplan_status() {
-    local wp_file="$STRATEGY_DIR/current/WeekPlan"*.md
-    if [ -f $wp_file ]; then
-        grep "in_progress\|pending" $wp_file | wc -l
+    local wp_file
+    wp_file=$(ls -t "$STRATEGY_DIR"/current/WeekPlan\ *.md 2>/dev/null | head -1)
+    if [ -n "$wp_file" ] && [ -f "$wp_file" ]; then
+        grep "in_progress\|pending" "$wp_file" | wc -l
     else
         echo "0"
     fi
