@@ -279,7 +279,7 @@ else
     log "Report written: $REPORT_FILE"
 
     cd "$COMMIT_DIR"
-    git pull --rebase --quiet 2>/dev/null || log "WARN: pull --rebase failed (offline?)"
+    git pull --rebase --quiet 2>/dev/null || log "INFO: pull --rebase skipped (offline or no changes)"
     git reset --quiet 2>/dev/null || true
 
     archive_old_reports
