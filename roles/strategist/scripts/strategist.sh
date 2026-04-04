@@ -14,8 +14,18 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 WORKSPACE="$HOME/IWE/DS-strategy"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/strategist"
-CLAUDE_PATH="{{HOME_DIR}}/.local/bin/claude"
+CLAUDE_PATH="$HOME/.local/bin/claude"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude CLI
+
+# Template placeholders may survive in repo mode; prefer a real local Claude path.
+if [ ! -x "$CLAUDE_PATH" ]; then
+    CLAUDE_PATH="$(command -v claude 2>/dev/null || true)"
+fi
+
+if [ -z "$CLAUDE_PATH" ] || [ ! -x "$CLAUDE_PATH" ]; then
+    echo "ERROR: Claude CLI not found. Expected \$HOME/.local/bin/claude or command -v claude" >&2
+    exit 1
+fi
 
 # macOS не имеет GNU timeout — используем perl fallback
 if ! command -v timeout &>/dev/null; then
@@ -67,6 +77,11 @@ notify_telegram() {
 run_claude() {
     local command_file="$1"
     local command_path="$PROMPTS_DIR/$command_file.md"
+
+    # day-close migrated from strategist prompts to the close protocol.
+    if [ "$command_file" = "day-close" ]; then
+        command_path="$HOME/Github/FMT-exocortex-template/memory/protocol-close.md"
+    fi
 
     if [ ! -f "$command_path" ]; then
         log "ERROR: Command file not found: $command_path"
