@@ -20,18 +20,18 @@
 
 Прочитай переменную окружения `SESSION_IMPORT_FILE` — это полный путь к файлу.
 Если переменная не задана — найди последний файл в:
-`/Users/alexander/Github/DS-strategy/inbox/pending-sessions/`
+`{{WORKSPACE_DIR}}/DS-strategy/inbox/pending-sessions/`
 с паттерном `Сессия стратегирования YYYY-MM-DD_HH-MM.md`.
 
 Если pending-sessions пустой — ищи в:
-`/Users/alexander/Documents/creativ-convector.nocloud/System/Сессии стратегирования/`
+`{{HOME_DIR}}/Documents/creativ-convector.nocloud/System/Сессии стратегирования/`
 последний необработанный файл (нет метки `[tasks-extracted]`).
 
 Прочитай файл полностью.
 
 ### Шаг 2: Проверить не обработан ли уже
 
-Прочитай `/Users/alexander/Github/DS-strategy/inbox/INBOX-TASKS.md`.
+Прочитай `{{WORKSPACE_DIR}}/DS-strategy/inbox/INBOX-TASKS.md`.
 Если в файле уже есть секция заголовка `## [Задачи из сессии YYYY-MM-DD] [source: сессия YYYY-MM-DD]`
 совпадающая с датой файла → завершить работу с сообщением `SKIP: tasks already extracted`.
 Не считай простые упоминания строки `[source: сессия YYYY-MM-DD]` в комментариях, документации или старых заметках признаком того, что задачи уже извлечены.
@@ -64,7 +64,7 @@
 
 ### Шаг 4: Записать в INBOX-TASKS.md
 
-Файл: `/Users/alexander/Github/DS-strategy/inbox/INBOX-TASKS.md`
+Файл: `{{WORKSPACE_DIR}}/DS-strategy/inbox/INBOX-TASKS.md`
 
 Добавь секцию с датой сессии:
 
@@ -92,7 +92,7 @@
 
 ### Шаг 5: Пометить сессию как обработанную
 
-Если файл сессии в `/Users/alexander/Documents/creativ-convector.nocloud/System/Сессии стратегирования/`,
+Если файл сессии в `{{HOME_DIR}}/Documents/creativ-convector.nocloud/System/Сессии стратегирования/`,
 добавь метку `[tasks-extracted YYYY-MM-DD]` в первую строку файла.
 
 Если файл в `pending-sessions/` — пометь аналогично.
@@ -100,9 +100,9 @@
 ### Шаг 6: Закоммитить
 
 ```bash
-git -C /Users/alexander/Github/DS-strategy add inbox/INBOX-TASKS.md
-git -C /Users/alexander/Github/DS-strategy commit -m "session-tasks: {N} задач из сессии {YYYY-MM-DD}"
-git -C /Users/alexander/Github/DS-strategy push
+git -C {{WORKSPACE_DIR}}/DS-strategy add inbox/INBOX-TASKS.md
+git -C {{WORKSPACE_DIR}}/DS-strategy commit -m "session-tasks: {N} задач из сессии {YYYY-MM-DD}"
+git -C {{WORKSPACE_DIR}}/DS-strategy push
 ```
 
 ## Что НЕ делать

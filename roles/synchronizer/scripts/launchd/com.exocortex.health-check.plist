@@ -8,7 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/alexander/Github/FMT-exocortex-template/roles/synchronizer/scripts/health-check.sh</string>
+        <string>{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/synchronizer/scripts/health-check.sh</string>
     </array>
 
     <key>StartInterval</key>
@@ -18,10 +18,10 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/alexander/logs/health-check/launchd-stdout.log</string>
+    <string>{{HOME_DIR}}/logs/health-check/launchd-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/alexander/logs/health-check/launchd-stderr.log</string>
+    <string>{{HOME_DIR}}/logs/health-check/launchd-stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>

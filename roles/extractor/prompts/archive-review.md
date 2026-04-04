@@ -11,13 +11,13 @@
 
 ### Шаг 1: Прочитать архив
 
-1. Прочитай `/Users/alexander/Github/DS-strategy/inbox/archive/index.md`
+1. Прочитай `{{WORKSPACE_DIR}}/DS-strategy/inbox/archive/index.md`
 2. Найди все записи со статусом `rejected`, `deferred`, `pending`
 3. Если архив пуст → напиши `Archive is empty` и завершись
 
 ### Шаг 2: Прочитать текущие Pack'и
 
-1. Прочитай `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/routing.md`
+1. Прочитай `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/routing.md`
 2. Для каждого Pack из routing.md — прочитай его `00-pack-manifest.md`
 3. Составь список: какие домены и типы знаний сейчас покрыты
 
@@ -30,7 +30,7 @@
 
 ### Шаг 4: Сгенерировать отчёт
 
-Создай файл: `/Users/alexander/Github/DS-strategy/inbox/extraction-reports/{YYYY-MM-DD}-archive-review.md`
+Создай файл: `{{WORKSPACE_DIR}}/DS-strategy/inbox/extraction-reports/{YYYY-MM-DD}-archive-review.md`
 
 ```markdown
 ---

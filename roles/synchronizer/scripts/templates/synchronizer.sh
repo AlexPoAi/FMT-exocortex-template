@@ -10,7 +10,7 @@ build_message() {
 
     case "$scenario" in
         "daily-report")
-            local report_file="/Users/alexander/Github/DS-strategy/current/SchedulerReport $DATE.md"
+            local report_file="{{WORKSPACE_DIR}}/DS-strategy/current/SchedulerReport $DATE.md"
 
             if [ ! -f "$report_file" ]; then
                 echo ""

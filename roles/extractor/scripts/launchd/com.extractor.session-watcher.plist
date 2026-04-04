@@ -8,24 +8,24 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/alexander/Github/FMT-exocortex-template/roles/extractor/scripts/session-watcher.sh</string>
+        <string>{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/scripts/session-watcher.sh</string>
     </array>
 
     <key>StartInterval</key>
     <integer>300</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/alexander/logs/extractor/session-watcher.log</string>
+    <string>{{HOME_DIR}}/logs/extractor/session-watcher.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/alexander/logs/extractor/session-watcher-error.log</string>
+    <string>{{HOME_DIR}}/logs/extractor/session-watcher-error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>HOME</key>
-        <string>/Users/alexander</string>
+        <string>{{HOME_DIR}}</string>
     </dict>
 
     <key>RunAtLoad</key>

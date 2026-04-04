@@ -8,7 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
-        <string>/Users/alexander/Github/FMT-exocortex-template/roles/extractor/scripts/telegram-to-captures.py</string>
+        <string>{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/scripts/telegram-to-captures.py</string>
     </array>
 
     <!-- Постоянный процесс: перезапускать если упал -->
@@ -19,17 +19,17 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/alexander/logs/extractor/telegram-captures.log</string>
+    <string>{{HOME_DIR}}/logs/extractor/telegram-captures.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/alexander/logs/extractor/telegram-captures-error.log</string>
+    <string>{{HOME_DIR}}/logs/extractor/telegram-captures-error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>HOME</key>
-        <string>/Users/alexander</string>
+        <string>{{HOME_DIR}}</string>
     </dict>
 
     <!-- Throttle: не перезапускать чаще чем раз в 30 сек -->

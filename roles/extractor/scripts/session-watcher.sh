@@ -2,10 +2,10 @@
 # Session Watcher — следит за pending-sessions/, запускает session-import + session-tasks
 # Запускается launchd каждые 5 минут из чистой среды (без CLAUDECODE)
 
-PENDING_DIR="/Users/alexander/Github/DS-strategy/inbox/pending-sessions"
-PROCESSED_DIR="/Users/alexander/Github/DS-strategy/inbox/processed-sessions"
-EXTRACTOR="/Users/alexander/Github/FMT-exocortex-template/roles/extractor/scripts/extractor.sh"
-LOG_DIR="/Users/alexander/logs/extractor"
+PENDING_DIR="{{WORKSPACE_DIR}}/DS-strategy/inbox/pending-sessions"
+PROCESSED_DIR="{{WORKSPACE_DIR}}/DS-strategy/inbox/processed-sessions"
+EXTRACTOR="{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/scripts/extractor.sh"
+LOG_DIR="{{HOME_DIR}}/logs/extractor"
 LOG_FILE="$LOG_DIR/$(date +%Y-%m-%d).log"
 
 mkdir -p "$LOG_DIR" "$PROCESSED_DIR"

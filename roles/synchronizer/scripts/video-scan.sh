@@ -17,7 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/memory"
-WORKSPACE="/Users/alexander/Github"
+WORKSPACE="{{HOME_DIR}}/Github"
 LOG_DIR="$HOME/logs/synchronizer"
 DATE=$(date +%Y-%m-%d)
 LOG_FILE="$LOG_DIR/video-scan-$DATE.log"

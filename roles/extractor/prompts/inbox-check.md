@@ -22,12 +22,12 @@
 
 ### Шаг 0: Прочитать конфигурацию
 
-1. Прочитай `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/routing.md` — таблицы маршрутизации.
-2. Прочитай `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/feedback-log.md` — лог отклонённых кандидатов. Если capture похож на ранее отклонённый → пропусти.
+1. Прочитай `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/routing.md` — таблицы маршрутизации.
+2. Прочитай `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/feedback-log.md` — лог отклонённых кандидатов. Если capture похож на ранее отклонённый → пропусти.
 
 ### Шаг 1: Проверить inbox
 
-1. Прочитай `/Users/alexander/Github/DS-strategy/inbox/captures.md`
+1. Прочитай `{{WORKSPACE_DIR}}/DS-strategy/inbox/captures.md`
 2. Найди все pending записи (секции `### ...` без метки `[processed]`)
 3. Если pending записей нет → напиши в лог `No pending captures in inbox` и **заверши работу**
 4. Если pending > 5 → возьми первые 5 (по порядку в файле)
@@ -70,7 +70,7 @@
 
 ### Шаг 3: Сгенерировать Extraction Report
 
-Создай файл отчёта: `/Users/alexander/Github/DS-strategy/inbox/extraction-reports/{YYYY-MM-DD}-inbox-check.md`
+Создай файл отчёта: `{{WORKSPACE_DIR}}/DS-strategy/inbox/extraction-reports/{YYYY-MM-DD}-inbox-check.md`
 
 Если файл с таким именем уже существует, добавь суффикс: `{YYYY-MM-DD}-inbox-check-2.md`.
 
@@ -135,7 +135,7 @@ remaining: M
 
 ### Шаг 3b: Создать задачи в INBOX-TASKS для каждого accept-кандидата
 
-После генерации отчёта — для каждого кандидата с вердиктом `accept` добавь задачу в `/Users/alexander/Github/DS-strategy/inbox/INBOX-TASKS.md`.
+После генерации отчёта — для каждого кандидата с вердиктом `accept` добавь задачу в `{{WORKSPACE_DIR}}/DS-strategy/inbox/INBOX-TASKS.md`.
 
 **Где добавить:** в начало файла, сразу после frontmatter (перед первой задачей).
 
@@ -168,9 +168,9 @@ remaining: M
 ### Шаг 4b: Rejected captures → Archive
 
 Для каждого capture с вердиктом `reject`:
-1. Создай файл в `/Users/alexander/Github/DS-strategy/inbox/archive/rejected/` с именем `CO.reject.{NNN}-{slug}.md`
+1. Создай файл в `{{WORKSPACE_DIR}}/DS-strategy/inbox/archive/rejected/` с именем `CO.reject.{NNN}-{slug}.md`
 2. Frontmatter: `id`, `type: capture`, `status: rejected`, `reason`, `date`, `source`, `tags`
-3. Добавь запись в `/Users/alexander/Github/DS-strategy/inbox/archive/index.md` (новая строка в таблице Реестр)
+3. Добавь запись в `{{WORKSPACE_DIR}}/DS-strategy/inbox/archive/index.md` (новая строка в таблице Реестр)
 
 ### Шаг 5: Закоммитить
 

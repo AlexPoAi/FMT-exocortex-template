@@ -10,20 +10,20 @@
 ## Конфигурация
 
 Перед обработкой прочитай:
-1. `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/routing.md` — таблицы маршрутизации
-2. `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/feedback-log.md` — лог отклонённых кандидатов
+1. `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/routing.md` — таблицы маршрутизации
+2. `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/feedback-log.md` — лог отклонённых кандидатов
 
 ## Алгоритм
 
 ### Шаг 1: Найти файл сессии
 
 Прочитай переменную окружения `SESSION_IMPORT_FILE` — это полный путь к файлу сессии.
-Если переменная не задана — найди последний файл в `/Users/alexander/Github/DS-strategy/inbox/pending-sessions/` с паттерном `Сессия стратегирования YYYY-MM-DD_HH-MM.md`.
+Если переменная не задана — найди последний файл в `{{WORKSPACE_DIR}}/DS-strategy/inbox/pending-sessions/` с паттерном `Сессия стратегирования YYYY-MM-DD_HH-MM.md`.
 Прочитай файл полностью.
 
 ### Шаг 2: Проверить уже импортированные знания
 
-Прочитай `/Users/alexander/Github/DS-strategy/inbox/captures.md`.
+Прочитай `{{WORKSPACE_DIR}}/DS-strategy/inbox/captures.md`.
 Определи ДАТУ сессии из имени файла (YYYY-MM-DD).
 Составь список заголовков (`### ...`) уже существующих в captures с меткой `[source: сессия {YYYY-MM-DD}]` этой даты.
 **ВАЖНО:** Не пропускать всю сессию — пропускать только конкретные знания, которые уже есть в captures.
@@ -52,7 +52,7 @@
 
 ### Шаг 4: Записать captures
 
-Для каждого кандидата добавь секцию в `/Users/alexander/Github/DS-strategy/inbox/captures.md` сразу после строки `<!-- Captures добавляются ниже этой строки -->`:
+Для каждого кандидата добавь секцию в `{{WORKSPACE_DIR}}/DS-strategy/inbox/captures.md` сразу после строки `<!-- Captures добавляются ниже этой строки -->`:
 
 ```markdown
 ### {Название знания} [source: сессия {YYYY-MM-DD}]
@@ -67,9 +67,9 @@
 ### Шаг 5: Закоммитить
 
 ```
-git -C /Users/alexander/Github/DS-strategy add inbox/captures.md
-git -C /Users/alexander/Github/DS-strategy commit -m "session-import: {N} captures из сессии {YYYY-MM-DD}"
-git -C /Users/alexander/Github/DS-strategy push
+git -C {{WORKSPACE_DIR}}/DS-strategy add inbox/captures.md
+git -C {{WORKSPACE_DIR}}/DS-strategy commit -m "session-import: {N} captures из сессии {YYYY-MM-DD}"
+git -C {{WORKSPACE_DIR}}/DS-strategy push
 ```
 
 ## Что НЕ делать

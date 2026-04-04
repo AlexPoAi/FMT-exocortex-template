@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-WORKSPACE="/Users/alexander/Github/DS-strategy"
+WORKSPACE="{{WORKSPACE_DIR}}/DS-strategy"
 FLEETING="${WORKSPACE}/inbox/fleeting-notes.md"
 ARCHIVE="${WORKSPACE}/archive/notes/Notes-Archive.md"
 TODAY=$(date +%Y-%m-%d)

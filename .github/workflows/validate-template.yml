@@ -37,7 +37,12 @@ jobs:
         run: |
           FAIL=0
           count=$(grep -rn '/Users/' . --include="*.md" --include="*.sh" \
-                  --include="*.json" --include="*.plist" 2>/dev/null | wc -l)
+                  --include="*.json" --include="*.plist" 2>/dev/null \
+                  | grep -v "setup/validate-template.sh" \
+                  | grep -v ".github/workflows/validate-template.yml" \
+                  | grep -v "# .*\(example\|slug\|/Users/alice\)" \
+                  | grep -v "^.*setup\.sh:.*# " \
+                  | wc -l)
           if [ "$count" -gt 0 ]; then
             echo "FAIL: Found /Users/ in $count locations:"
             grep -rn '/Users/' . --include="*.md" --include="*.sh" 2>/dev/null | head -5

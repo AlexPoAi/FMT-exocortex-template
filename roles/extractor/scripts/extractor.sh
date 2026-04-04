@@ -6,10 +6,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-WORKSPACE="/Users/alexander/Github"
+WORKSPACE="{{HOME_DIR}}/Github"
 PROMPTS_DIR="$REPO_DIR/prompts"
-LOG_DIR="/Users/alexander/logs/extractor"
-ENV_FILE="/Users/alexander/.config/aist/env"
+LOG_DIR="{{HOME_DIR}}/logs/extractor"
+ENV_FILE="{{HOME_DIR}}/.config/aist/env"
 DEFAULT_CLAUDE_PATH="/opt/homebrew/bin/claude"
 
 AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
