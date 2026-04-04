@@ -98,10 +98,22 @@ ${prompt}"
 
     # Запуск Claude Code с содержимым команды как промпт (с timeout-защитой)
     local rc=0
+    local tmp_out
+    tmp_out=$(mktemp)
     timeout "$CLAUDE_TIMEOUT" "$CLAUDE_PATH" --dangerously-skip-permissions \
         --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
         -p "$prompt" \
-        >> "$LOG_FILE" 2>&1 || rc=$?
+        > "$tmp_out" 2>&1 || rc=$?
+    cat "$tmp_out" >> "$LOG_FILE"
+
+    # Детектор Auth failure (OAuth 401) — немедленный алерт
+    if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set' "$tmp_out" 2>/dev/null; then
+        log "CRITICAL: Auth failed for scenario: $command_file — требуется claude /login"
+        notify "🔴 Экзокортекс: AUTH FAILURE" "Стратег/$command_file: токен истёк. Запусти: claude /login"
+        rm -f "$tmp_out"
+        return 1
+    fi
+    rm -f "$tmp_out"
 
     if [ $rc -eq 124 ]; then
         log "WARN: Claude CLI timed out after ${CLAUDE_TIMEOUT}s for scenario: $command_file"
