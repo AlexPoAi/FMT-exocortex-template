@@ -16,18 +16,25 @@ fi
 
 build_message() {
     local scenario="$1"
+    local report_file_agent="$AGENT_WORKSPACE_DIR/scheduler/reports/SchedulerReport $DATE.md"
+    local report_file_strategy="$STRATEGY_DIR/current/SchedulerReport $DATE.md"
+    local active_report_file=""
+
+    if [ -f "$report_file_agent" ]; then
+        active_report_file="$report_file_agent"
+    elif [ -f "$report_file_strategy" ]; then
+        active_report_file="$report_file_strategy"
+    fi
 
     case "$scenario" in
         "daily-report")
-            local report_file="{{WORKSPACE_DIR}}/DS-strategy/current/SchedulerReport $DATE.md"
-
-            if [ ! -f "$report_file" ]; then
+            if [ -z "$active_report_file" ]; then
                 echo ""
                 return
             fi
 
             local week
-            week=$(grep '^week:' "$report_file" | head -1 | awk '{print $2}')
+            week=$(grep '^week:' "$active_report_file" | head -1 | awk '{print $2}')
 
             printf "<b>📊 Ежедневный отчёт</b>\n\n"
             printf "📅 %s (%s)\n\n" "$DATE" "$week"
@@ -137,7 +144,8 @@ build_message() {
 
         "day-close")
             local session_context="$HOME/Github/DS-strategy/current/SESSION-CONTEXT.md"
-            local report_file="$HOME/Github/DS-strategy/current/SchedulerReport $DATE.md"
+            local latest_dayplan
+            latest_dayplan=$(ls -t "$STRATEGY_DIR"/current/DayPlan\ *.md 2>/dev/null | head -1)
 
             if [ ! -f "$session_context" ]; then
                 echo ""
@@ -146,7 +154,6 @@ build_message() {
 
             printf "<b>🔒 Закрытие дня %s</b>\n\n" "$(date +%d.%m)"
 
-            # Что сделано сегодня
             local today_tasks
             today_tasks=$(awk "/## Что сделано сегодня \($DATE\)/,/^---$/" "$session_context" | grep "^- ✅" | head -5 | sed 's/^- ✅ \[.*\] /• /' | sed 's/^- ✅/• /')
 
@@ -154,14 +161,41 @@ build_message() {
                 printf "<b>✅ Что сделано:</b>\n%s\n\n" "$today_tasks"
             fi
 
-            # Статус системы
-            if [ -f "$report_file" ]; then
-                local status_line
-                status_line=$(grep -E "^## (🟢|🟡|🔴)" "$report_file" | head -1)
-                printf "<b>%s</b>\n\n" "$status_line"
+            local dirty=0
+            local checked=0
+            for repo in "$HOME/Github/DS-strategy" "$HOME/Github/FMT-exocortex-template" "$HOME/Github/DS-agent-workspace" "$HOME/Github/VK-offee"; do
+                if [ -d "$repo/.git" ]; then
+                    checked=$((checked + 1))
+                    if [ -n "$(git -C "$repo" status --short 2>/dev/null)" ]; then
+                        dirty=$((dirty + 1))
+                    fi
+                fi
+            done
+
+            if [ "$checked" -gt 0 ]; then
+                if [ "$dirty" -eq 0 ]; then
+                    printf "<b>🟢 Состояние системы:</b>\n"
+                    printf "• Репозитории чисты\n"
+                    printf "• Изменения сохранены и готовы к продолжению\n\n"
+                else
+                    printf "<b>🟡 Состояние системы:</b>\n"
+                    printf "• Есть незакрытые изменения: %s репо\n" "$dirty"
+                    printf "• Нужна дополнительная проверка перед следующим циклом\n\n"
+                fi
             fi
 
-            printf "День закрыт. Все изменения сохранены.\n"
+            if [ -n "$latest_dayplan" ] && [ -f "$latest_dayplan" ]; then
+                local tomorrow_tasks
+                tomorrow_tasks=$(awk '
+                    /^## План на сегодня/ {in_plan=1; next}
+                    /^## / && in_plan {exit}
+                    in_plan && /^\| [0-9]+ \|/ {print}
+                ' "$latest_dayplan" | head -3 | awk -F'|' '{gsub(/^ +| +$/, "", $3); printf "• %s\n", $3}')
+
+                if [ -n "$tomorrow_tasks" ]; then
+                    printf "<b>🔜 На завтра (топ-3):</b>\n%s\n" "$tomorrow_tasks"
+                fi
+            fi
             ;;
 
         *)
