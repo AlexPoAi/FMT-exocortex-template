@@ -63,7 +63,7 @@ get_github_link() {
 build_message() {
     local scenario="$1"
 
-    if [ "$scenario" = "note-review-canary" ]; then
+    if [ "$scenario" = "note-review-canary" ] || [ "$scenario" = "auth-failure" ]; then
         if [ -n "${NOTIFY_TEXT:-}" ]; then
             printf "%s" "${NOTIFY_TEXT}"
         else

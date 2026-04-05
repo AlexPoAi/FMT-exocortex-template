@@ -11,11 +11,17 @@ caffeinate -diu -w $$ &
 # Конфигурация
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-WORKSPACE="$HOME/IWE/DS-strategy"
+WORKSPACE_ROOT="$HOME/Github"
+if [ ! -d "$WORKSPACE_ROOT/DS-strategy/.git" ]; then
+    WORKSPACE_ROOT="$HOME/IWE"
+fi
+WORKSPACE="$WORKSPACE_ROOT/DS-strategy"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/strategist"
 CLAUDE_PATH="$HOME/.local/bin/claude"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude CLI
+GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
+[ -n "$GITHUB_USER" ] || GITHUB_USER="AlexPoAi"
 
 # Template placeholders may survive in repo mode; prefer a real local Claude path.
 if [ ! -x "$CLAUDE_PATH" ]; then
@@ -74,6 +80,12 @@ notify_telegram() {
     "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist "$scenario" >> "$LOG_FILE" 2>&1 || true
 }
 
+notify_telegram_text() {
+    local scenario="$1"
+    local text="$2"
+    NOTIFY_TEXT="$text" "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist "$scenario" >> "$LOG_FILE" 2>&1 || true
+}
+
 run_claude() {
     local command_file="$1"
     local command_path="$PROMPTS_DIR/$command_file.md"
@@ -90,7 +102,18 @@ run_claude() {
 
     # Читаем содержимое команды
     local prompt
-    prompt=$(cat "$command_path")
+    prompt=$(python3 - "$command_path" "$WORKSPACE_ROOT" "$HOME" "$GITHUB_USER" <<'PY'
+import sys
+from pathlib import Path
+
+path, workspace_dir, home_dir, github_user = sys.argv[1:5]
+text = Path(path).read_text(encoding="utf-8")
+text = text.replace("{{WORKSPACE_DIR}}", workspace_dir)
+text = text.replace("{{HOME_DIR}}", home_dir)
+text = text.replace("{{GITHUB_USER}}", github_user)
+print(text)
+PY
+)
 
     # Inject current date + day of week (prevents LLM calendar arithmetic errors)
     local ru_date_context
@@ -122,21 +145,27 @@ ${prompt}"
     cat "$tmp_out" >> "$LOG_FILE"
 
     # Детектор Auth failure (OAuth 401) — немедленный алерт
-    if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set' "$tmp_out" 2>/dev/null; then
+    if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled' "$tmp_out" 2>/dev/null; then
         log "CRITICAL: Auth failed for scenario: $command_file — требуется claude /login"
         notify "🔴 Экзокортекс: AUTH FAILURE" "Стратег/$command_file: токен истёк. Запусти: claude /login"
+        notify_telegram_text "auth-failure" "🔴 <b>Strategist auth failure</b>\n\nСценарий: <b>$command_file</b>\nДействие: выполнить <code>claude /login</code> и повторить запуск."
         rm -f "$tmp_out"
         return 1
     fi
     rm -f "$tmp_out"
 
     if [ $rc -eq 124 ]; then
-        log "WARN: Claude CLI timed out after ${CLAUDE_TIMEOUT}s for scenario: $command_file"
+        log "ERROR: Claude CLI timed out after ${CLAUDE_TIMEOUT}s for scenario: $command_file"
+        log "Scenario result: $command_file status=timeout exit_code=$rc"
+        return 124
     elif [ $rc -ne 0 ]; then
-        log "WARN: Claude CLI exited with code $rc for scenario: $command_file"
+        log "ERROR: Claude CLI exited with code $rc for scenario: $command_file"
+        log "Scenario result: $command_file status=failed exit_code=$rc"
+        return "$rc"
     fi
 
     log "Completed scenario: $command_file"
+    log "Scenario result: $command_file status=success exit_code=0"
 
     # Push changes to GitHub (чтобы бот мог читать через API)
     if git -C "$WORKSPACE" diff --quiet origin/main..HEAD 2>/dev/null; then
@@ -170,12 +199,30 @@ mkdir -p "$LOCK_DIR"
 acquire_lock() {
     local scenario="$1"
     local lockfile="$LOCK_DIR/${scenario}.${DATE}.lock"
+    local pidfile="$lockfile/pid"
+
+    if [ -d "$lockfile" ]; then
+        local existing_pid=""
+        if [ -f "$pidfile" ]; then
+            existing_pid=$(cat "$pidfile" 2>/dev/null || true)
+        fi
+
+        if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
+            log "SKIP: $scenario already running (lock exists: $lockfile, pid=$existing_pid)"
+            exit 2  # non-zero → scheduler won't mark_done
+        fi
+
+        log "WARN: stale lock detected for $scenario — removing $lockfile"
+        rm -rf "$lockfile"
+    fi
+
     if ! mkdir "$lockfile" 2>/dev/null; then
         log "SKIP: $scenario already running (lock exists: $lockfile)"
-        exit 2  # non-zero → scheduler won't mark_done
+        exit 2
     fi
+    echo "$$" > "$pidfile"
     # Auto-cleanup lock on exit
-    trap "rmdir '$lockfile' 2>/dev/null" EXIT
+    trap "rm -f '$pidfile' 2>/dev/null; rmdir '$lockfile' 2>/dev/null" EXIT
 }
 
 # Читаем strategy_day из конфига (L4 Personal)
