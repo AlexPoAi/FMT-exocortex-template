@@ -144,8 +144,12 @@ build_message() {
 
         "day-close")
             local session_context="$HOME/Github/DS-strategy/current/SESSION-CONTEXT.md"
+            local session_open="$HOME/Github/DS-strategy/current/SESSION-OPEN (Экран открытия сессии).md"
+            local agents_status="$HOME/Github/DS-strategy/current/AGENTS-STATUS.md"
+            local scheduler_report=""
             local latest_dayplan
             latest_dayplan=$(ls -t "$STRATEGY_DIR"/current/DayPlan\ *.md 2>/dev/null | head -1)
+            scheduler_report=$(ls -t "$HOME/Github/DS-agent-workspace"/scheduler/reports/SchedulerReport\ *.md 2>/dev/null | head -1)
 
             if [ ! -f "$session_context" ]; then
                 echo ""
@@ -154,6 +158,53 @@ build_message() {
 
             printf "<b>🔒 Закрытие дня %s</b>\n\n" "$(date +%d.%m)"
 
+            if [ -f "$session_open" ]; then
+                local verdict_line
+                verdict_line=$(grep -m1 "Итоговый verdict:" "$session_open" | sed 's/^- //')
+                local attention_lines
+                attention_lines=$(awk '
+                    /^## Что требует внимания/ {flag=1; next}
+                    /^## / && flag {exit}
+                    flag && /^- / {print}
+                ' "$session_open" | head -3 | sed 's/^- /• /')
+
+                printf "<b>🧠 Состояние экзокортекса:</b>\n"
+                if [ -n "$verdict_line" ]; then
+                    printf "• %s\n" "$verdict_line"
+                fi
+                if [ -n "$attention_lines" ]; then
+                    printf "%s\n" "$attention_lines"
+                fi
+                printf "\n"
+            fi
+
+            if [ -f "$scheduler_report" ] || [ -f "$agents_status" ]; then
+                local worked_lines=""
+                if [ -f "$scheduler_report" ]; then
+                    worked_lines=$(awk -F'|' '
+                        /^\| [0-9]+ \|/ {
+                            task=$3; status=$4;
+                            gsub(/^ +| +$/, "", task);
+                            gsub(/\*\*/, "", status);
+                            gsub(/^ +| +$/, "", status);
+                            if (task != "" && status != "") {
+                                print "• " task ": " status
+                            }
+                        }
+                    ' "$scheduler_report" | head -4)
+                fi
+                if [ -z "$worked_lines" ] && [ -f "$agents_status" ]; then
+                    worked_lines=$(awk '
+                        /^## Задачи/ {flag=1; next}
+                        /^## / && flag {exit}
+                        flag && /^- / {print}
+                    ' "$agents_status" | head -4 | sed 's/^- /• /')
+                fi
+                if [ -n "$worked_lines" ]; then
+                    printf "<b>🤖 Какие агенты отработали:</b>\n%s\n\n" "$worked_lines"
+                fi
+            fi
+
             local today_tasks
             today_tasks=$(awk "/## Что сделано сегодня \($DATE\)/,/^---$/" "$session_context" | grep "^- ✅" | head -5 | sed 's/^- ✅ \[.*\] /• /' | sed 's/^- ✅/• /')
 
@@ -161,39 +212,48 @@ build_message() {
                 printf "<b>✅ Что сделано:</b>\n%s\n\n" "$today_tasks"
             fi
 
-            local dirty=0
-            local checked=0
-            for repo in "$HOME/Github/DS-strategy" "$HOME/Github/FMT-exocortex-template" "$HOME/Github/DS-agent-workspace" "$HOME/Github/VK-offee"; do
-                if [ -d "$repo/.git" ]; then
-                    checked=$((checked + 1))
-                    if [ -n "$(git -C "$repo" status --short 2>/dev/null)" ]; then
-                        dirty=$((dirty + 1))
-                    fi
-                fi
-            done
-
-            if [ "$checked" -gt 0 ]; then
-                if [ "$dirty" -eq 0 ]; then
-                    printf "<b>🟢 Состояние системы:</b>\n"
-                    printf "• Репозитории чисты\n"
-                    printf "• Изменения сохранены и готовы к продолжению\n\n"
-                else
-                    printf "<b>🟡 Состояние системы:</b>\n"
-                    printf "• Есть незакрытые изменения: %s репо\n" "$dirty"
-                    printf "• Нужна дополнительная проверка перед следующим циклом\n\n"
-                fi
-            fi
-
             if [ -n "$latest_dayplan" ] && [ -f "$latest_dayplan" ]; then
+                local in_progress
+                in_progress=$(awk '
+                    /^## РП в работе/ {flag=1; next}
+                    /^## / && flag {exit}
+                    flag && /^- / {print}
+                ' "$latest_dayplan" | head -3 | sed 's/^- /• /')
+
+                if [ -z "$in_progress" ]; then
+                    in_progress=$(awk -F'|' '
+                        /^\| [0-9]+ \|/ {
+                            wp=$3; status=$7;
+                            gsub(/^ +| +$/, "", wp);
+                            gsub(/^ +| +$/, "", status);
+                            if (status != "done" && wp != "") {
+                                print "• " wp
+                            }
+                        }
+                    ' "$latest_dayplan" | head -3)
+                fi
+
+                if [ -n "$in_progress" ]; then
+                    printf "<b>🔄 Что в работе:</b>\n%s\n\n" "$in_progress"
+                fi
+
                 local tomorrow_tasks
-                tomorrow_tasks=$(awk '
+                tomorrow_tasks=$(awk -F'|' '
                     /^## План на сегодня/ {in_plan=1; next}
                     /^## / && in_plan {exit}
-                    in_plan && /^\| [0-9]+ \|/ {print}
-                ' "$latest_dayplan" | head -3 | awk -F'|' '{gsub(/^ +| +$/, "", $3); printf "• %s\n", $3}')
+                    in_plan && /^\| [0-9]+ \|/ {
+                        wp=$3; prio=$5; status=$7;
+                        gsub(/^ +| +$/, "", wp);
+                        gsub(/^ +| +$/, "", prio);
+                        gsub(/^ +| +$/, "", status);
+                        if (status != "done" && wp != "") {
+                            print "• " wp " (" prio ")"
+                        }
+                    }
+                ' "$latest_dayplan" | head -3)
 
                 if [ -n "$tomorrow_tasks" ]; then
-                    printf "<b>🔜 На завтра (топ-3):</b>\n%s\n" "$tomorrow_tasks"
+                    printf "<b>🎯 Приоритеты на завтра:</b>\n%s\n" "$tomorrow_tasks"
                 fi
             fi
             ;;
