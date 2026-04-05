@@ -20,17 +20,18 @@
 
 | Масштаб | Открытие | Работа | Закрытие |
 |---------|----------|--------|----------|
-| **Сессия** | `protocol-open.md § Сессия` (любое задание) | `protocol-work.md` | `/run-protocol close` |
-| **День** | `/day-open` («открывай») | Между Day Open и Day Close | `/run-protocol day-close` |
+| **Сессия** | `protocol-open.md § Сессия` (любое задание, «открывай сессию») | `protocol-work.md` | `/run-protocol close` |
+| **День** | `protocol-open.md § Сессия` + truthful opening-state («открывай», «открывай день») | Между Day Open и Day Close | `/run-protocol day-close` |
 | **Неделя** | — | — | `/run-protocol week-close` |
 
 ### Блокирующие правила
 
 1. **WP Gate:** ЛЮБОЕ задание → протокол Открытия → ДО начала работы.
-2. **Push:** «заливай» / «запуши» → commit + push без доп. вопросов. Push ДО отчёта Закрытия.
-3. **Close:** Триггер Закрытия → протокол Закрытия → выполнить.
-4. **Чеклист-верификация (Haiku R23):** Quick Close и Day Close — sub-agent Haiku R23 (context isolation). Исключения: сессия ≤15 мин или без изменений файлов.
-5. **Pull-before-Commit / Без Obsidian:** см. §9.
+2. **Единый маршрут открытия:** `открывай`, `открывай сессию`, `открывай день` всегда проходят через `memory/protocol-open.md` и один русский стартовый экран.
+3. **Push:** «заливай» / «запуши» → commit + push без доп. вопросов. Push ДО отчёта Закрытия.
+4. **Close:** Триггер Закрытия → протокол Закрытия → выполнить.
+5. **Чеклист-верификация (Haiku R23):** Quick Close и Day Close — sub-agent Haiku R23 (context isolation). Исключения: сессия ≤15 мин или без изменений файлов.
+6. **Pull-before-Commit / Без Obsidian:** см. §9.
 
 ### Протокол Работы (полный → `memory/protocol-work.md`)
 
