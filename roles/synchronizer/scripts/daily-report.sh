@@ -43,7 +43,27 @@ HOUR=$(date +%H)
 WEEK=$(date +%V)
 
 DRY_RUN=false
-[ "${1:-}" = "--dry-run" ] && DRY_RUN=true
+REFRESH_STATUS_ARTIFACTS=false
+COMMIT_STRATEGY_ARTIFACTS=false
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        --refresh-status-artifacts)
+            REFRESH_STATUS_ARTIFACTS=true
+            ;;
+        --commit-strategy-artifacts)
+            COMMIT_STRATEGY_ARTIFACTS=true
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
 
 REPORT_FILE="$REPORT_DIR/SchedulerReport $DATE.md"
 SCHEDULER_LOG="$LOG_DIR/scheduler-$DATE.log"
@@ -718,6 +738,52 @@ $warnings
     echo "$report"
 }
 
+refresh_runtime_mode_artifact() {
+    if [ ! -x "$RUNTIME_ARBITER_PATH" ]; then
+        log "WARN: runtime arbiter not executable: $RUNTIME_ARBITER_PATH"
+        return 1
+    fi
+
+    if bash "$RUNTIME_ARBITER_PATH" >/dev/null 2>&1; then
+        log "Runtime mode refreshed: $RUNTIME_MODE_FILE"
+        return 0
+    fi
+
+    log "WARN: runtime arbiter refresh failed: $RUNTIME_ARBITER_PATH"
+    return 1
+}
+
+write_status_artifacts() {
+    build_agents_status > "$AGENTS_STATUS_FILE"
+    log "Agents status written: $AGENTS_STATUS_FILE"
+    build_session_open > "$SESSION_OPEN_FILE"
+    log "Session open written: $SESSION_OPEN_FILE"
+}
+
+commit_strategy_artifacts() {
+    if [ ! -d "$STRATEGY_DIR/.git" ]; then
+        return 0
+    fi
+
+    git -C "$STRATEGY_DIR" add current/AGENTS-STATUS.md \
+        'current/SESSION-OPEN (Экран открытия сессии).md' \
+        current/RUNTIME-MODE.md 2>/dev/null || true
+
+    if git -C "$STRATEGY_DIR" diff --cached --quiet 2>/dev/null; then
+        log "No strategy artifact changes to commit"
+        return 0
+    fi
+
+    if git -C "$STRATEGY_DIR" commit -m "auto: refresh opening artifacts $DATE" --quiet; then
+        git -C "$STRATEGY_DIR" push --quiet 2>/dev/null || log "WARN: DS-strategy push failed — opening artifacts committed locally"
+        log "Opening artifacts committed and pushed"
+        return 0
+    fi
+
+    log "WARN: DS-strategy opening artifacts commit failed"
+    return 1
+}
+
 archive_old_reports() {
     # WP-29: атомарная ротация — git mv staged отдельным коммитом,
     # fallback mv только если git mv упал (файл вне git-дерева).
@@ -750,6 +816,19 @@ archive_old_reports() {
 
 log "=== Daily Report Started ==="
 
+refresh_runtime_mode_artifact || true
+
+if [ "$REFRESH_STATUS_ARTIFACTS" = true ]; then
+    write_status_artifacts
+
+    if [ "$COMMIT_STRATEGY_ARTIFACTS" = true ] && [ "$DRY_RUN" = false ]; then
+        commit_strategy_artifacts || true
+    fi
+
+    log "=== Daily Report Completed ==="
+    exit 0
+fi
+
 REPORT=$(generate_report)
 
 if [ "$DRY_RUN" = true ]; then
@@ -758,10 +837,7 @@ if [ "$DRY_RUN" = true ]; then
 else
     echo "$REPORT" > "$REPORT_FILE"
     log "Report written: $REPORT_FILE"
-    build_agents_status > "$AGENTS_STATUS_FILE"
-    log "Agents status written: $AGENTS_STATUS_FILE"
-    build_session_open > "$SESSION_OPEN_FILE"
-    log "Session open written: $SESSION_OPEN_FILE"
+    write_status_artifacts
 
     cd "$COMMIT_DIR"
     git pull --rebase --quiet 2>/dev/null || log "INFO: pull --rebase skipped (offline or no changes)"
@@ -784,17 +860,7 @@ else
         log "No changes to commit"
     fi
 
-    if [ -d "$STRATEGY_DIR/.git" ]; then
-        git -C "$STRATEGY_DIR" add current/AGENTS-STATUS.md 'current/SESSION-OPEN (Экран открытия сессии).md' 2>/dev/null || true
-        if ! git -C "$STRATEGY_DIR" diff --cached --quiet 2>/dev/null; then
-            if git -C "$STRATEGY_DIR" commit -m "auto: refresh opening artifacts $DATE" --quiet; then
-                git -C "$STRATEGY_DIR" push --quiet 2>/dev/null || log "WARN: DS-strategy push failed — opening artifacts committed locally"
-                log "Opening artifacts committed and pushed"
-            else
-                log "WARN: DS-strategy opening artifacts commit failed"
-            fi
-        fi
-    fi
+    commit_strategy_artifacts || true
 fi
 
 log "=== Daily Report Completed ==="

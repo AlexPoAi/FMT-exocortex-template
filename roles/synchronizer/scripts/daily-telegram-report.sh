@@ -16,6 +16,7 @@ ENV_FILE="$HOME/.config/aist/env"
 LEGACY_TOKEN_FILE="$HOME/.config/exocortex/telegram-token"
 LEGACY_CHAT_ID_FILE="$HOME/.config/exocortex/telegram-chat-id"
 NOTIFY_SCRIPT="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh"
+DAILY_REPORT_SCRIPT="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/daily-report.sh"
 
 mkdir -p "$STATE_DIR"
 
@@ -91,6 +92,17 @@ get_hired_agents() {
 # Основной процесс
 if [ ! -x "$NOTIFY_SCRIPT" ]; then
     log "ERROR: notify.sh not found or not executable: $NOTIFY_SCRIPT"
+    exit 1
+fi
+
+if [ ! -x "$DAILY_REPORT_SCRIPT" ]; then
+    log "ERROR: daily-report.sh not found or not executable: $DAILY_REPORT_SCRIPT"
+    exit 1
+fi
+
+log "Refreshing runtime/opening artifacts before Telegram report"
+if ! "$DAILY_REPORT_SCRIPT" --refresh-status-artifacts --commit-strategy-artifacts >> "$LOG_DIR/daily-report-$TODAY.log" 2>&1; then
+    log "ERROR: failed to refresh runtime/opening artifacts before Telegram send"
     exit 1
 fi
 
