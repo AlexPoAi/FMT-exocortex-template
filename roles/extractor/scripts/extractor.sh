@@ -14,6 +14,8 @@ DEFAULT_CLAUDE_PATH="${CLAUDE_PATH:-$(command -v claude 2>/dev/null || echo /usr
 
 AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
 AI_CLI_MODEL="${AI_CLI_MODEL:-}"
+AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
+AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
 AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
 
 mkdir -p "$LOG_DIR"
@@ -111,6 +113,7 @@ preflight_check() {
 }
 
 build_claude_args() {
+    local model="$1"
     local args=()
 
     if [ -n "$AI_CLI_EXTRA_FLAGS" ]; then
@@ -118,11 +121,48 @@ build_claude_args() {
         args=($AI_CLI_EXTRA_FLAGS)
     fi
 
-    if [ -n "$AI_CLI_MODEL" ]; then
-        args+=(--model "$AI_CLI_MODEL")
+    if [ -n "$model" ]; then
+        args+=(--model "$model")
     fi
 
     printf '%s\n' "${args[@]}"
+}
+
+sanitize_model() {
+    local model="$1"
+    [ -n "$model" ] || return 1
+
+    case "$model" in
+        *opus*)
+            log "WARN: Opus model requested but prohibited by runtime policy: $model"
+            return 1
+            ;;
+        *)
+            printf '%s\n' "$model"
+            ;;
+    esac
+}
+
+build_model_candidates() {
+    local primary fallback candidate
+    local seen=""
+
+    primary=$(sanitize_model "$AI_CLI_PRIMARY_MODEL" 2>/dev/null || true)
+    fallback=$(sanitize_model "$AI_CLI_FALLBACK_MODEL" 2>/dev/null || true)
+
+    for candidate in "$primary" "$fallback"; do
+        [ -n "$candidate" ] || continue
+        case " $seen " in
+            *" $candidate "*) continue ;;
+        esac
+        seen="$seen $candidate"
+        printf '%s\n' "$candidate"
+    done
+}
+
+is_model_unavailable_error() {
+    local output_file="$1"
+    grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error' "$output_file" 2>/dev/null
 }
 
 run_claude() {
@@ -159,11 +199,6 @@ run_claude() {
 $extra_args"
     fi
 
-    local -a claude_args=()
-    while IFS= read -r arg; do
-        [ -n "$arg" ] && claude_args+=("$arg")
-    done < <(build_claude_args)
-
     log "Starting process: $command_file"
     log "Command file: $command_path"
     log "Claude path: $resolved_cli"
@@ -171,32 +206,68 @@ $extra_args"
     cd "$WORKSPACE"
     unset CLAUDECODE
 
-    local tmp_out
-    tmp_out=$(mktemp)
-    set +e
-    "$resolved_cli" "${claude_args[@]}" \
-        "$AI_CLI_PROMPT_FLAG" "$prompt" \
-        > "$tmp_out" 2>&1
-    local exit_code=$?
-    set -e
-    cat "$tmp_out" >> "$LOG_FILE"
+    local -a model_candidates=()
+    local candidate
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] && model_candidates+=("$candidate")
+    done < <(build_model_candidates)
 
-    if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set' "$tmp_out" 2>/dev/null; then
-        log "CRITICAL: Auth failed via helper/env/custom API"
-        notify "🔴 Экзокортекс: auth failure" "Агент $command_file упал: проверь ~/.config/aist/env и helper"
-        notify_telegram "$command_file"
-        rm -f "$tmp_out"
-        return 17
+    if [ "${#model_candidates[@]}" -eq 0 ]; then
+        log "ERROR: no allowed Claude models configured for extractor"
+        return 18
     fi
-    rm -f "$tmp_out"
 
-    if [ $exit_code -ne 0 ]; then
-        log "ERROR: claude exited with code $exit_code for $command_file"
+    local exit_code=0
+    local attempt_model=""
+    local attempt_index=0
+    local total_attempts="${#model_candidates[@]}"
+    local tmp_out=""
+
+    for attempt_model in "${model_candidates[@]}"; do
+        local -a claude_args=()
+        while IFS= read -r arg; do
+            [ -n "$arg" ] && claude_args+=("$arg")
+        done < <(build_claude_args "$attempt_model")
+
+        attempt_index=$((attempt_index + 1))
+        tmp_out=$(mktemp)
+        log "Model attempt $attempt_index/$total_attempts for $command_file: $attempt_model"
+
+        set +e
+        "$resolved_cli" "${claude_args[@]}" \
+            "$AI_CLI_PROMPT_FLAG" "$prompt" \
+            > "$tmp_out" 2>&1
+        exit_code=$?
+        set -e
+        cat "$tmp_out" >> "$LOG_FILE"
+
+        if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set' "$tmp_out" 2>/dev/null; then
+            log "CRITICAL: Auth failed via helper/env/custom API"
+            notify "🔴 Экзокортекс: auth failure" "Агент $command_file упал: проверь ~/.config/aist/env и helper"
+            notify_telegram "$command_file"
+            rm -f "$tmp_out"
+            return 17
+        fi
+
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$tmp_out"
+            log "Completed process: $command_file"
+            log "Process result: $command_file status=success exit_code=0 model=$attempt_model"
+            break
+        fi
+
+        if [ "$attempt_index" -lt "$total_attempts" ] && is_model_unavailable_error "$tmp_out"; then
+            local next_model="${model_candidates[$attempt_index]}"
+            log "WARN: model unavailable for $command_file on $attempt_model — falling back to $next_model"
+            rm -f "$tmp_out"
+            continue
+        fi
+
+        rm -f "$tmp_out"
+        log "ERROR: claude exited with code $exit_code for $command_file (model=$attempt_model)"
         notify "⚠️ Экзокортекс: ошибка агента" "extractor/$command_file завершился с кодом $exit_code"
         return $exit_code
-    fi
-
-    log "Completed process: $command_file"
+    done
 
     local strategy_dir="$WORKSPACE/DS-strategy"
     if [ -d "$strategy_dir/.git" ]; then

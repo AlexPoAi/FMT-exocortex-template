@@ -20,6 +20,8 @@ PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/strategist"
 CLAUDE_PATH="$HOME/.local/bin/claude"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude CLI
+AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
+AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
 GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
 [ -n "$GITHUB_USER" ] || GITHUB_USER="AlexPoAi"
 
@@ -86,6 +88,43 @@ notify_telegram_text() {
     NOTIFY_TEXT="$text" "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist "$scenario" >> "$LOG_FILE" 2>&1 || true
 }
 
+sanitize_model() {
+    local model="$1"
+    [ -n "$model" ] || return 1
+
+    case "$model" in
+        *opus*)
+            log "WARN: Opus model requested but prohibited by runtime policy: $model"
+            return 1
+            ;;
+        *)
+            printf '%s\n' "$model"
+            ;;
+    esac
+}
+
+build_model_candidates() {
+    local primary fallback candidate
+    local seen=""
+
+    primary=$(sanitize_model "$AI_CLI_PRIMARY_MODEL" 2>/dev/null || true)
+    fallback=$(sanitize_model "$AI_CLI_FALLBACK_MODEL" 2>/dev/null || true)
+
+    for candidate in "$primary" "$fallback"; do
+        [ -n "$candidate" ] || continue
+        case " $seen " in
+            *" $candidate "*) continue ;;
+        esac
+        seen="$seen $candidate"
+        printf '%s\n' "$candidate"
+    done
+}
+
+is_model_unavailable_error() {
+    local output_file="$1"
+    grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error' "$output_file" 2>/dev/null
+}
+
 run_claude() {
     local command_file="$1"
     local command_path="$PROMPTS_DIR/$command_file.md"
@@ -134,38 +173,69 @@ ${prompt}"
 
     cd "$WORKSPACE"
 
-    # Запуск Claude Code с содержимым команды как промпт (с timeout-защитой)
+    local -a model_candidates=()
+    local candidate
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] && model_candidates+=("$candidate")
+    done < <(build_model_candidates)
+
+    if [ "${#model_candidates[@]}" -eq 0 ]; then
+        log "ERROR: no allowed Claude models configured for strategist"
+        return 18
+    fi
+
     local rc=0
-    local tmp_out
-    tmp_out=$(mktemp)
-    timeout "$CLAUDE_TIMEOUT" "$CLAUDE_PATH" --dangerously-skip-permissions \
-        --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
-        -p "$prompt" \
-        > "$tmp_out" 2>&1 || rc=$?
-    cat "$tmp_out" >> "$LOG_FILE"
+    local attempt_model=""
+    local tmp_out=""
+    local attempt_index=0
+    local total_attempts="${#model_candidates[@]}"
 
-    # Детектор Auth failure (OAuth 401) — немедленный алерт
-    if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled' "$tmp_out" 2>/dev/null; then
-        log "CRITICAL: Auth failed for scenario: $command_file — требуется claude /login"
-        notify "🔴 Экзокортекс: AUTH FAILURE" "Стратег/$command_file: токен истёк. Запусти: claude /login"
-        notify_telegram_text "auth-failure" "🔴 <b>Strategist auth failure</b>\n\nСценарий: <b>$command_file</b>\nДействие: выполнить <code>claude /login</code> и повторить запуск."
+    for attempt_model in "${model_candidates[@]}"; do
+        attempt_index=$((attempt_index + 1))
+        rc=0
+        tmp_out=$(mktemp)
+
+        log "Model attempt $attempt_index/$total_attempts for $command_file: $attempt_model"
+        timeout "$CLAUDE_TIMEOUT" "$CLAUDE_PATH" --dangerously-skip-permissions \
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
+            --model "$attempt_model" \
+            -p "$prompt" \
+            > "$tmp_out" 2>&1 || rc=$?
+        cat "$tmp_out" >> "$LOG_FILE"
+
+        if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled' "$tmp_out" 2>/dev/null; then
+            log "CRITICAL: Auth failed for scenario: $command_file — требуется claude /login"
+            notify "🔴 Экзокортекс: AUTH FAILURE" "Стратег/$command_file: токен истёк. Запусти: claude /login"
+            notify_telegram_text "auth-failure" "🔴 <b>Strategist auth failure</b>\n\nСценарий: <b>$command_file</b>\nДействие: выполнить <code>claude /login</code> и повторить запуск."
+            rm -f "$tmp_out"
+            return 1
+        fi
+
+        if [ "$rc" -eq 0 ]; then
+            rm -f "$tmp_out"
+            log "Completed scenario: $command_file"
+            log "Scenario result: $command_file status=success exit_code=0 model=$attempt_model"
+            break
+        fi
+
+        if [ "$attempt_index" -lt "$total_attempts" ] && is_model_unavailable_error "$tmp_out"; then
+            local next_model="${model_candidates[$attempt_index]}"
+            log "WARN: model unavailable for $command_file on $attempt_model — falling back to $next_model"
+            rm -f "$tmp_out"
+            continue
+        fi
+
         rm -f "$tmp_out"
-        return 1
-    fi
-    rm -f "$tmp_out"
+        if [ "$rc" -eq 124 ]; then
+            log "ERROR: Claude CLI timed out after ${CLAUDE_TIMEOUT}s for scenario: $command_file (model=$attempt_model)"
+            log "Scenario result: $command_file status=timeout exit_code=$rc model=$attempt_model"
+            return 124
+        fi
 
-    if [ $rc -eq 124 ]; then
-        log "ERROR: Claude CLI timed out after ${CLAUDE_TIMEOUT}s for scenario: $command_file"
-        log "Scenario result: $command_file status=timeout exit_code=$rc"
-        return 124
-    elif [ $rc -ne 0 ]; then
-        log "ERROR: Claude CLI exited with code $rc for scenario: $command_file"
-        log "Scenario result: $command_file status=failed exit_code=$rc"
+        log "ERROR: Claude CLI exited with code $rc for scenario: $command_file (model=$attempt_model)"
+        log "Scenario result: $command_file status=failed exit_code=$rc model=$attempt_model"
         return "$rc"
-    fi
-
-    log "Completed scenario: $command_file"
-    log "Scenario result: $command_file status=success exit_code=0"
+    done
 
     # Push changes to GitHub (чтобы бот мог читать через API)
     if git -C "$WORKSPACE" diff --quiet origin/main..HEAD 2>/dev/null; then
