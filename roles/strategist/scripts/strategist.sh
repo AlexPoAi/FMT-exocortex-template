@@ -18,7 +18,7 @@ fi
 WORKSPACE="$WORKSPACE_ROOT/DS-strategy"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/strategist"
-CLAUDE_PATH="$HOME/.local/bin/claude"
+CLAUDE_PATH="${CLAUDE_PATH:-$HOME/.local/bin/claude}"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude CLI
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
 AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
@@ -122,17 +122,29 @@ build_model_candidates() {
 
 is_model_unavailable_error() {
     local output_file="$1"
-    grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error' "$output_file" 2>/dev/null
+    grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error|API Error: 400 .*"code":"E005".*"Invalid request"|invalid_request_error' "$output_file" 2>/dev/null
+}
+
+resolve_command_path() {
+    local command_file="$1"
+
+    case "$command_file" in
+        day-close)
+            printf '%s\n' "$HOME/Github/FMT-exocortex-template/memory/protocol-close.md"
+            ;;
+        day-plan)
+            printf '%s\n' "$HOME/Github/FMT-exocortex-template/memory/protocol-open.md"
+            ;;
+        *)
+            printf '%s\n' "$PROMPTS_DIR/$command_file.md"
+            ;;
+    esac
 }
 
 run_claude() {
     local command_file="$1"
-    local command_path="$PROMPTS_DIR/$command_file.md"
-
-    # day-close migrated from strategist prompts to the close protocol.
-    if [ "$command_file" = "day-close" ]; then
-        command_path="$HOME/Github/FMT-exocortex-template/memory/protocol-close.md"
-    fi
+    local command_path
+    command_path=$(resolve_command_path "$command_file")
 
     if [ ! -f "$command_path" ]; then
         log "ERROR: Command file not found: $command_path"
