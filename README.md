@@ -147,7 +147,7 @@ claude
 A: Нет, не обязательно. Для локального агентного слоя сейчас нормальный путь — Codex/OpenAI CLI. Claude тоже поддерживается и может выступать fallback-provider'ом. Для минимальной (`setup.sh --core`) система вообще работает с любым AI CLI. Подробнее: [SETUP-GUIDE.md](docs/SETUP-GUIDE.md).
 
 **Q: Работает ли с другими ИИ (не Claude)?**
-A: Да. Ядро IWE — markdown-файлы. Работает с Claude Code, Codex (OpenAI), Aider и другими AI CLI. Подробнее: [SETUP-GUIDE.md](docs/SETUP-GUIDE.md).
+A: Да. Ядро IWE — markdown-файлы. Работает с Codex, Claude Code, Aider и другими AI CLI. Для локального агентного слоя сейчас рекомендован режим `Codex-primary / Claude-fallback`. Подробнее: [SETUP-GUIDE.md](docs/SETUP-GUIDE.md).
 
 **Q: Работает ли на Linux/Windows?**
 A: Да. Ядро работает на любой ОС. Автоматизация Стратега: macOS — launchd, Linux — cron, Windows — WSL. Подробнее: [SETUP-GUIDE.md](docs/SETUP-GUIDE.md).
@@ -165,10 +165,10 @@ A: Три зоны защиты: локальная, GitHub (приватные 
 A: Obsidian — хранилище заметок. IWE — **рабочая среда** с протоколами, ИИ-агентами и формализацией знаний. Вы можете использовать Obsidian внутри IWE для заметок, но IWE даёт структуру, планирование и накопление компетенций.
 
 **Q: Нужно ли программировать?**
-A: Нет. Шаблон — готовая конфигурация. Установка через setup.sh. Работа — через Claude Code на естественном языке.
+A: Нет. Шаблон — готовая конфигурация. Установка через `setup.sh`. Работа — через AI CLI на естественном языке.
 
 **Q: Можно ли без Стратега?**
-A: Да. Claude Code + CLAUDE.md + memory/ работают полностью. Стратег — автоматизация планирования. Без него планируете вручную.
+A: Да. AI CLI + `CLAUDE.md` + `memory/` работают полностью. Стратег — автоматизация планирования. Без него планируете вручную.
 
 **Q: Как настроить день стратегирования?**
 A: В `memory/day-rhythm-config.yaml` измените `strategy_day: monday` на нужный день. Подробнее: [LEARNING-PATH.md](docs/LEARNING-PATH.md).
