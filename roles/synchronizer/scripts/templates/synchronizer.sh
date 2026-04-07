@@ -72,6 +72,8 @@ build_message() {
 
         "daily-telegram-report")
             local status_file="$STRATEGY_DIR/current/AGENTS-STATUS.md"
+            local session_open="$STRATEGY_DIR/current/SESSION-OPEN (Экран открытия сессии).md"
+            local runtime_mode="$STRATEGY_DIR/current/RUNTIME-MODE.md"
             local wp_file
             wp_file=$(ls -t "$STRATEGY_DIR"/current/WeekPlan\ *.md 2>/dev/null | head -1)
             local hired=0
@@ -82,11 +84,49 @@ build_message() {
 
             printf "<b>📊 Ежедневный отчёт экзокортекса</b>\n\n"
 
+            if [ -f "$session_open" ]; then
+                local verdict
+                verdict=$(grep -m1 "Итоговый verdict:" "$session_open" | sed 's/^- //' | sed 's/\*\*//g')
+                if [ -n "$verdict" ]; then
+                    printf "<b>Состояние мозга:</b>\n• %s\n\n" "$verdict"
+                fi
+            fi
+
             if [ -f "$status_file" ]; then
                 local status_lines
-                status_lines=$(grep "🟢\|🟡\|🔴" "$status_file" | head -10 | sed 's/^/• /')
+                status_lines=$(awk '
+                    /^- / && /Мозг экзокортекса:|Планировщик:|Проверка среды:|Runtime arbiter:|Стратег:|Экстрактор:/ {
+                        print "• " substr($0, 3)
+                    }
+                ' "$status_file" | head -8)
                 if [ -n "$status_lines" ]; then
                     printf "<b>Статус агентов:</b>\n%s\n\n" "$status_lines"
+                fi
+            fi
+
+            if [ -f "$runtime_mode" ]; then
+                local provider_line local_line cloud_line
+                provider_line=$(grep -m1 "Primary provider:" "$runtime_mode" | sed 's/^- /• /' | sed 's/`//g')
+                local_line=$(grep -m1 "Local control plane:" "$runtime_mode" | sed 's/^- /• /' | sed 's/`//g')
+                cloud_line=$(grep -m1 "Cloud RAG status:" "$runtime_mode" | sed 's/^- /• /' | sed 's/`//g')
+                if [ -n "$provider_line" ] || [ -n "$local_line" ] || [ -n "$cloud_line" ]; then
+                    printf "<b>Runtime mode:</b>\n"
+                    [ -n "$provider_line" ] && printf "%s\n" "$provider_line"
+                    [ -n "$local_line" ] && printf "%s\n" "$local_line"
+                    [ -n "$cloud_line" ] && printf "%s\n" "$cloud_line"
+                    printf "\n"
+                fi
+            fi
+
+            if [ -f "$session_open" ]; then
+                local attention_lines
+                attention_lines=$(awk '
+                    /^## Что требует внимания/ {flag=1; next}
+                    /^## / && flag {exit}
+                    flag && /^- / {print "• " substr($0, 3)}
+                ' "$session_open" | head -5)
+                if [ -n "$attention_lines" ]; then
+                    printf "<b>Что требует внимания:</b>\n%s\n\n" "$attention_lines"
                 fi
             fi
 
