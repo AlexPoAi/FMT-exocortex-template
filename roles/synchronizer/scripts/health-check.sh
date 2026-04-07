@@ -15,6 +15,9 @@ STATE_DIR="$HOME/.local/state/exocortex"
 STATUS_DIR="$STATE_DIR/status"
 WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
 CANONICAL_MEMORY_DIR="$WORKSPACE_DIR/memory"
+RUNTIME_ARBITER_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
+RUNTIME_POLICY_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-POLICY.env"
+RUNTIME_MODE_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-MODE.md"
 
 mkdir -p "$LOG_DIR"
 
@@ -171,6 +174,86 @@ check_protocol_contract() {
     fi
 }
 
+load_runtime_status() {
+    RUNTIME_ARBITER_STATUS="missing"
+    RUNTIME_PROVIDER_PRIMARY="unavailable"
+    RUNTIME_PROVIDER_REASON="runtime_arbiter_missing"
+    RUNTIME_CODEX_STATUS="unknown"
+    RUNTIME_CODEX_REASON="not_checked"
+    RUNTIME_CLAUDE_STATUS="unknown"
+    RUNTIME_CLAUDE_REASON="not_checked"
+    RUNTIME_LOCAL_STATUS="unknown"
+    RUNTIME_LOCAL_REASON="not_checked"
+    RUNTIME_CLOUD_RAG_STATUS="unknown"
+    RUNTIME_CLOUD_RAG_REASON="not_checked"
+    RUNTIME_POLICY_RESOLVED="unknown"
+    RUNTIME_CLOUD_TAKEOVER_SCOPE="unknown"
+    RUNTIME_CLOUD_BOT_DECLARED="unknown"
+
+    if [ ! -x "$RUNTIME_ARBITER_PATH" ]; then
+        return
+    fi
+
+    local tmp_env
+    tmp_env=$(mktemp)
+    if bash "$RUNTIME_ARBITER_PATH" --env > "$tmp_env" 2>/dev/null; then
+        # shellcheck disable=SC1090
+        source "$tmp_env"
+        RUNTIME_ARBITER_STATUS="available"
+        RUNTIME_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY_RESOLVED:-unavailable}"
+        RUNTIME_PROVIDER_REASON="${AI_CLI_PROVIDER_PRIMARY_REASON:-unknown}"
+        RUNTIME_CODEX_STATUS="${AI_CLI_CODEX_STATUS:-unknown}"
+        RUNTIME_CODEX_REASON="${AI_CLI_CODEX_REASON:-unknown}"
+        RUNTIME_CLAUDE_STATUS="${AI_CLI_CLAUDE_STATUS:-unknown}"
+        RUNTIME_CLAUDE_REASON="${AI_CLI_CLAUDE_REASON:-unknown}"
+        RUNTIME_LOCAL_STATUS="${AI_RUNTIME_LOCAL_CONTROL:-unknown}"
+        RUNTIME_LOCAL_REASON="${AI_RUNTIME_LOCAL_REASON:-unknown}"
+        RUNTIME_CLOUD_RAG_STATUS="${AI_RUNTIME_CLOUD_RAG_STATUS:-unknown}"
+        RUNTIME_CLOUD_RAG_REASON="${AI_RUNTIME_CLOUD_RAG_REASON:-unknown}"
+        RUNTIME_POLICY_RESOLVED="${AI_RUNTIME_POLICY_RESOLVED:-unknown}"
+        RUNTIME_CLOUD_TAKEOVER_SCOPE="${AI_RUNTIME_CLOUD_TAKEOVER_SCOPE:-unknown}"
+        RUNTIME_CLOUD_BOT_DECLARED="${AI_RUNTIME_CLOUD_BOT_DECLARED:-unknown}"
+    fi
+    rm -f "$tmp_env"
+}
+
+check_runtime_contract() {
+    load_runtime_status
+
+    if [ ! -f "$RUNTIME_POLICY_FILE" ]; then
+        WARNINGS+=("🟡 Runtime policy file missing: $RUNTIME_POLICY_FILE")
+        log "ВНИМАНИЕ: runtime policy file missing: $RUNTIME_POLICY_FILE"
+    fi
+
+    if [ "$RUNTIME_ARBITER_STATUS" != "available" ]; then
+        WARNINGS+=("🟡 Runtime arbiter unavailable: $RUNTIME_ARBITER_PATH")
+        log "ВНИМАНИЕ: runtime arbiter unavailable: $RUNTIME_ARBITER_PATH"
+        return
+    fi
+
+    log "ОК: runtime arbiter provider=$RUNTIME_PROVIDER_PRIMARY reason=$RUNTIME_PROVIDER_REASON codex=$RUNTIME_CODEX_STATUS claude=$RUNTIME_CLAUDE_STATUS local=$RUNTIME_LOCAL_STATUS cloud-rag=$RUNTIME_CLOUD_RAG_STATUS"
+
+    if [ "$RUNTIME_PROVIDER_PRIMARY" = "unavailable" ]; then
+        ERRORS+=("🔴 Runtime arbiter: no available AI provider")
+        log "ОШИБКА: runtime arbiter resolved no available provider"
+    fi
+
+    if [ "$RUNTIME_CODEX_STATUS" != "available" ] && [ "$RUNTIME_CLAUDE_STATUS" != "available" ]; then
+        ERRORS+=("🔴 Provider plane degraded: Codex and Claude both unavailable")
+        log "ОШИБКА: both Codex and Claude unavailable"
+    elif [ "$RUNTIME_CODEX_STATUS" != "available" ] || [ "$RUNTIME_CLAUDE_STATUS" != "available" ]; then
+        WARNINGS+=("🟡 Provider plane degraded: codex=$RUNTIME_CODEX_STATUS, claude=$RUNTIME_CLAUDE_STATUS")
+        log "ВНИМАНИЕ: provider plane partially degraded: codex=$RUNTIME_CODEX_STATUS, claude=$RUNTIME_CLAUDE_STATUS"
+    fi
+
+    if [ ! -f "$RUNTIME_MODE_FILE" ]; then
+        WARNINGS+=("🟡 Runtime mode artifact missing: $RUNTIME_MODE_FILE")
+        log "ВНИМАНИЕ: runtime mode artifact missing: $RUNTIME_MODE_FILE"
+    else
+        log "ОК: runtime mode artifact present: $RUNTIME_MODE_FILE"
+    fi
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -236,14 +319,8 @@ else
     log "ВНИМАНИЕ: проверка среды не загружена"
 fi
 
-if [ -x "$HOME/.config/aist/anthropic_auth_helper.sh" ] && "$HOME/.config/aist/anthropic_auth_helper.sh" >/dev/null 2>&1; then
-    log "ОК: помощник авторизации исправен"
-else
-    ERRORS+=("🔴 Помощник авторизации или env-слой сломан")
-    log "ОШИБКА: помощник авторизации или env-слой сломан"
-fi
-
 check_protocol_contract
+check_runtime_contract
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
     load_status "$task"

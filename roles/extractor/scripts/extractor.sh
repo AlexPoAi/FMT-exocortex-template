@@ -16,10 +16,11 @@ AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
 AI_CLI_MODEL="${AI_CLI_MODEL:-}"
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
 AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
-AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-codex}"
+AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
+RUNTIME_ARBITER_PATH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
 
 mkdir -p "$LOG_DIR"
 
@@ -95,6 +96,28 @@ has_codex_fallback() {
 
 uses_codex_as_primary() {
     [ "${AI_CLI_PROVIDER_PRIMARY}" = "codex" ] && resolve_codex_path >/dev/null 2>&1
+}
+
+resolve_provider_primary_choice() {
+    if [ "${AI_CLI_PROVIDER_PRIMARY}" != "auto" ]; then
+        printf '%s\n' "$AI_CLI_PROVIDER_PRIMARY"
+        return
+    fi
+
+    if [ -x "$RUNTIME_ARBITER_PATH" ]; then
+        # shellcheck disable=SC1090
+        source <(bash "$RUNTIME_ARBITER_PATH" --env)
+        if [ -n "${AI_CLI_PROVIDER_PRIMARY_RESOLVED:-}" ] && [ "$AI_CLI_PROVIDER_PRIMARY_RESOLVED" != "unavailable" ]; then
+            printf '%s\n' "$AI_CLI_PROVIDER_PRIMARY_RESOLVED"
+            return
+        fi
+    fi
+
+    if resolve_codex_path >/dev/null 2>&1; then
+        printf '%s\n' "codex"
+    else
+        printf '%s\n' "claude"
+    fi
 }
 
 preflight_check() {
@@ -276,6 +299,8 @@ $extra_args"
 
     cd "$WORKSPACE"
     unset CLAUDECODE
+
+    AI_CLI_PROVIDER_PRIMARY="$(resolve_provider_primary_choice)"
 
     if uses_codex_as_primary; then
         if run_codex_provider "$command_file" "$prompt" "primary_provider"; then

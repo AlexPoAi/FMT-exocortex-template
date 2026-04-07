@@ -19,6 +19,9 @@ LOG_DIR="$HOME/logs/synchronizer"
 STRATEGY_DIR="$HOME/Github/DS-strategy"
 WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
 CANONICAL_MEMORY_DIR="$WORKSPACE_DIR/memory"
+RUNTIME_ARBITER_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
+RUNTIME_POLICY_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-POLICY.env"
+RUNTIME_MODE_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-MODE.md"
 
 # Agent Workspace: если существует — отчёты идут туда
 AGENT_WORKSPACE="$HOME/Github/DS-agent-workspace"
@@ -250,6 +253,49 @@ protocol_contract_status() {
     echo "ok"
 }
 
+load_runtime_status() {
+    RUNTIME_ARBITER_STATUS="missing"
+    RUNTIME_PROVIDER_PRIMARY="unavailable"
+    RUNTIME_PROVIDER_REASON="runtime_arbiter_missing"
+    RUNTIME_CODEX_STATUS="unknown"
+    RUNTIME_CODEX_REASON="not_checked"
+    RUNTIME_CLAUDE_STATUS="unknown"
+    RUNTIME_CLAUDE_REASON="not_checked"
+    RUNTIME_LOCAL_STATUS="unknown"
+    RUNTIME_LOCAL_REASON="not_checked"
+    RUNTIME_CLOUD_RAG_STATUS="unknown"
+    RUNTIME_CLOUD_RAG_REASON="not_checked"
+    RUNTIME_POLICY_RESOLVED="unknown"
+    RUNTIME_CLOUD_TAKEOVER_SCOPE="unknown"
+    RUNTIME_CLOUD_BOT_DECLARED="unknown"
+
+    if [ ! -x "$RUNTIME_ARBITER_PATH" ]; then
+        return
+    fi
+
+    local tmp_env
+    tmp_env=$(mktemp)
+    if bash "$RUNTIME_ARBITER_PATH" --env > "$tmp_env" 2>/dev/null; then
+        # shellcheck disable=SC1090
+        source "$tmp_env"
+        RUNTIME_ARBITER_STATUS="available"
+        RUNTIME_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY_RESOLVED:-unavailable}"
+        RUNTIME_PROVIDER_REASON="${AI_CLI_PROVIDER_PRIMARY_REASON:-unknown}"
+        RUNTIME_CODEX_STATUS="${AI_CLI_CODEX_STATUS:-unknown}"
+        RUNTIME_CODEX_REASON="${AI_CLI_CODEX_REASON:-unknown}"
+        RUNTIME_CLAUDE_STATUS="${AI_CLI_CLAUDE_STATUS:-unknown}"
+        RUNTIME_CLAUDE_REASON="${AI_CLI_CLAUDE_REASON:-unknown}"
+        RUNTIME_LOCAL_STATUS="${AI_RUNTIME_LOCAL_CONTROL:-unknown}"
+        RUNTIME_LOCAL_REASON="${AI_RUNTIME_LOCAL_REASON:-unknown}"
+        RUNTIME_CLOUD_RAG_STATUS="${AI_RUNTIME_CLOUD_RAG_STATUS:-unknown}"
+        RUNTIME_CLOUD_RAG_REASON="${AI_RUNTIME_CLOUD_RAG_REASON:-unknown}"
+        RUNTIME_POLICY_RESOLVED="${AI_RUNTIME_POLICY_RESOLVED:-unknown}"
+        RUNTIME_CLOUD_TAKEOVER_SCOPE="${AI_RUNTIME_CLOUD_TAKEOVER_SCOPE:-unknown}"
+        RUNTIME_CLOUD_BOT_DECLARED="${AI_RUNTIME_CLOUD_BOT_DECLARED:-unknown}"
+    fi
+    rm -f "$tmp_env"
+}
+
 build_agents_status() {
     local strategist="🟢 зелёный"
     local extractor="🟢 зелёный"
@@ -258,8 +304,10 @@ build_agents_status() {
     local auth="🟢 зелёный"
     local brain="🟢 зелёный"
     local protocol_contract="🟢 зелёный"
+    local runtime_plane="🟢 зелёный"
     local updated
     updated="$(date '+%Y-%m-%d %H:%M')"
+    load_runtime_status
 
     case "$(protocol_contract_status)" in
         ok) ;;
@@ -268,6 +316,22 @@ build_agents_status() {
             brain="🟡 требует внимания"
             ;;
     esac
+
+    case "$RUNTIME_ARBITER_STATUS" in
+        available) ;;
+        *)
+            runtime_plane="🟡 требует внимания"
+            brain="🟡 требует внимания"
+            ;;
+    esac
+
+    if [ "$RUNTIME_PROVIDER_PRIMARY" = "unavailable" ]; then
+        runtime_plane="🔴 требует внимания"
+        brain="🔴 требует внимания"
+    elif [ "$RUNTIME_CODEX_STATUS" != "available" ] || [ "$RUNTIME_CLAUDE_STATUS" != "available" ]; then
+        [ "$runtime_plane" = "🟢 зелёный" ] && runtime_plane="🟡 требует внимания"
+        [ "$brain" = "🟢 зелёный" ] && brain="🟡 требует внимания"
+    fi
 
     for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
         load_status "$task"
@@ -321,10 +385,23 @@ build_agents_status() {
 - Проверка среды: **🟢 зелёный**
 - Помощник авторизации: **$auth**
 - Canonical protocol route: **$protocol_contract**
+- Runtime arbiter: **$runtime_plane**
 - Статус-артефакты: **$sync**
 - Стратег: **$strategist**
 - Экстрактор: **$extractor**
 - Обновлено: **$updated**
+
+## Runtime
+
+- Provider primary: **$RUNTIME_PROVIDER_PRIMARY**
+- Provider reason: **$RUNTIME_PROVIDER_REASON**
+- Codex: **$RUNTIME_CODEX_STATUS**
+- Claude: **$RUNTIME_CLAUDE_STATUS**
+- Runtime policy: **$RUNTIME_POLICY_RESOLVED**
+- Local control plane: **$RUNTIME_LOCAL_STATUS**
+- Cloud RAG: **$RUNTIME_CLOUD_RAG_STATUS**
+- Cloud takeover scope: **$RUNTIME_CLOUD_TAKEOVER_SCOPE**
+- Cloud bot runtime: **$RUNTIME_CLOUD_BOT_DECLARED**
 
 ## Задачи
 EOF
@@ -342,8 +419,11 @@ build_session_open() {
     local issues=""
     local stale_list=""
     local protocol_route_status="🟢 green"
+    local runtime_plane_status="🟢 green"
+    local provider_line="codex/claude availability unknown"
     local updated
     updated="$(date '+%Y-%m-%d %H:%M:%S')"
+    load_runtime_status
 
     case "$(protocol_contract_status)" in
         ok) ;;
@@ -362,6 +442,27 @@ build_session_open() {
             issues="${issues}- Canonical protocol route incomplete: expected memory/protocol-open.md, memory/protocol-work.md, memory/protocol-close.md under $CANONICAL_MEMORY_DIR\n"
             ;;
     esac
+
+    if [ "$RUNTIME_ARBITER_STATUS" != "available" ]; then
+        [ "$verdict_emoji" = "🟢" ] && verdict_emoji="🟡"
+        [ "$verdict_color" = "🟢 green" ] && verdict_color="🟡 yellow"
+        [ "$verdict_label" = "Мозг экзокортекса — готов к работе" ] && verdict_label="Мозг экзокортекса — требует внимания"
+        runtime_plane_status="🟡 yellow"
+        issues="${issues}- Runtime arbiter unavailable: $RUNTIME_ARBITER_PATH\n"
+    elif [ "$RUNTIME_PROVIDER_PRIMARY" = "unavailable" ]; then
+        verdict_emoji="🔴"
+        verdict_label="Мозг экзокортекса — требует внимания"
+        verdict_color="🔴 red"
+        runtime_plane_status="🔴 red"
+        issues="${issues}- Runtime arbiter resolved no available provider\n"
+    elif [ "$RUNTIME_CODEX_STATUS" != "available" ] || [ "$RUNTIME_CLAUDE_STATUS" != "available" ]; then
+        [ "$verdict_emoji" = "🟢" ] && verdict_emoji="🟡"
+        [ "$verdict_color" = "🟢 green" ] && verdict_color="🟡 yellow"
+        [ "$verdict_label" = "Мозг экзокортекса — готов к работе" ] && verdict_label="Мозг экзокортекса — требует внимания"
+        runtime_plane_status="🟡 yellow"
+    fi
+
+    provider_line="primary=$RUNTIME_PROVIDER_PRIMARY, codex=$RUNTIME_CODEX_STATUS, claude=$RUNTIME_CLAUDE_STATUS"
 
     for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
         load_status "$task"
@@ -405,7 +506,17 @@ build_session_open() {
 - Проверка среды: **🟢 green**
 - Помощник авторизации: **🟢 green**
 - Canonical protocol route: **$protocol_route_status**
+- Runtime arbiter: **$runtime_plane_status**
 - Статус-артефакты: **$( [ "$verdict_emoji" = "🔴" ] && echo "🔴 red" || [ "$verdict_emoji" = "🟡" ] && echo "🟡 yellow" || echo "🟢 green")**
+
+## Runtime mode
+
+- Provider plane: **$provider_line**
+- Runtime policy: **$RUNTIME_POLICY_RESOLVED**
+- Local control plane: **$RUNTIME_LOCAL_STATUS**
+- Cloud RAG: **$RUNTIME_CLOUD_RAG_STATUS**
+- Cloud takeover scope: **$RUNTIME_CLOUD_TAKEOVER_SCOPE**
+- Cloud bot runtime: **$RUNTIME_CLOUD_BOT_DECLARED**
 
 ## Задачи агентов
 EOF
@@ -560,6 +671,23 @@ agent: Синхронизатор
     fi
 
     report+="
+
+"
+
+    load_runtime_status
+    report+="## Runtime mode
+
+- Provider primary: **$RUNTIME_PROVIDER_PRIMARY**
+- Provider reason: **$RUNTIME_PROVIDER_REASON**
+- Codex: **$RUNTIME_CODEX_STATUS** (\`$RUNTIME_CODEX_REASON\`)
+- Claude: **$RUNTIME_CLAUDE_STATUS** (\`$RUNTIME_CLAUDE_REASON\`)
+- Runtime policy: **$RUNTIME_POLICY_RESOLVED**
+- Local control plane: **$RUNTIME_LOCAL_STATUS** (\`$RUNTIME_LOCAL_REASON\`)
+- Cloud RAG: **$RUNTIME_CLOUD_RAG_STATUS** (\`$RUNTIME_CLOUD_RAG_REASON\`)
+- Cloud takeover scope: **$RUNTIME_CLOUD_TAKEOVER_SCOPE**
+- Cloud bot runtime: **$RUNTIME_CLOUD_BOT_DECLARED**
+- Runtime policy file: **$( [ -f "$RUNTIME_POLICY_FILE" ] && echo "present" || echo "missing" )**
+- Runtime mode artifact: **$( [ -f "$RUNTIME_MODE_FILE" ] && echo "present" || echo "missing" )**
 
 "
 

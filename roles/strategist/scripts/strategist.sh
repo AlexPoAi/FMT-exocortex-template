@@ -22,9 +22,10 @@ CLAUDE_PATH="${CLAUDE_PATH:-$HOME/.local/bin/claude}"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude CLI
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
 AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
-AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-codex}"
+AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
+RUNTIME_ARBITER_PATH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
 GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
 [ -n "$GITHUB_USER" ] || GITHUB_USER="AlexPoAi"
 
@@ -107,6 +108,28 @@ has_codex_fallback() {
 
 uses_codex_as_primary() {
     [ "${AI_CLI_PROVIDER_PRIMARY}" = "codex" ] && [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]
+}
+
+resolve_provider_primary_choice() {
+    if [ "${AI_CLI_PROVIDER_PRIMARY}" != "auto" ]; then
+        printf '%s\n' "$AI_CLI_PROVIDER_PRIMARY"
+        return
+    fi
+
+    if [ -x "$RUNTIME_ARBITER_PATH" ]; then
+        # shellcheck disable=SC1090
+        source <(bash "$RUNTIME_ARBITER_PATH" --env)
+        if [ -n "${AI_CLI_PROVIDER_PRIMARY_RESOLVED:-}" ] && [ "$AI_CLI_PROVIDER_PRIMARY_RESOLVED" != "unavailable" ]; then
+            printf '%s\n' "$AI_CLI_PROVIDER_PRIMARY_RESOLVED"
+            return
+        fi
+    fi
+
+    if [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]; then
+        printf '%s\n' "codex"
+    else
+        printf '%s\n' "claude"
+    fi
 }
 
 fail_day_close_headless() {
@@ -256,6 +279,8 @@ ${prompt}"
     log "Date context: $ru_date_context"
 
     cd "$WORKSPACE"
+
+    AI_CLI_PROVIDER_PRIMARY="$(resolve_provider_primary_choice)"
 
     if uses_codex_as_primary; then
         if run_codex_provider "$command_file" "$prompt" "primary_provider"; then
