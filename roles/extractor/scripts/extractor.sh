@@ -16,6 +16,8 @@ AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
 AI_CLI_MODEL="${AI_CLI_MODEL:-}"
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
 AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
+AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
 
 mkdir -p "$LOG_DIR"
@@ -72,6 +74,22 @@ resolve_claude_path() {
         return
     fi
     return 1
+}
+
+resolve_codex_path() {
+    if [ -n "${CODEX_PATH:-}" ] && [ -x "${CODEX_PATH}" ]; then
+        echo "$CODEX_PATH"
+        return
+    fi
+    if command -v codex >/dev/null 2>&1; then
+        command -v codex
+        return
+    fi
+    return 1
+}
+
+has_codex_fallback() {
+    [ "${AI_CLI_PROVIDER_FALLBACK}" = "codex" ] && resolve_codex_path >/dev/null 2>&1
 }
 
 preflight_check() {
@@ -165,6 +183,47 @@ is_model_unavailable_error() {
     grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error' "$output_file" 2>/dev/null
 }
 
+run_codex_provider() {
+    local command_file="$1"
+    local prompt="$2"
+    local reason="${3:-claude_unavailable}"
+    local resolved_codex
+    local tmp_out tmp_msg rc=0
+
+    resolved_codex=$(resolve_codex_path) || return 1
+    tmp_out=$(mktemp)
+    tmp_msg=$(mktemp)
+
+    log "WARN: falling back to Codex for $command_file (reason=$reason, model=$CODEX_MODEL)"
+    "$resolved_codex" exec \
+        --skip-git-repo-check \
+        -C "$WORKSPACE" \
+        --output-last-message "$tmp_msg" \
+        --sandbox danger-full-access \
+        -m "$CODEX_MODEL" \
+        "$prompt" \
+        > "$tmp_out" 2>&1 || rc=$?
+
+    cat "$tmp_out" >> "$LOG_FILE"
+    if [ -s "$tmp_msg" ]; then
+        printf '\n' >> "$LOG_FILE"
+        cat "$tmp_msg" >> "$LOG_FILE"
+        printf '\n' >> "$LOG_FILE"
+    fi
+
+    rm -f "$tmp_out" "$tmp_msg"
+
+    if [ "$rc" -eq 0 ]; then
+        log "Completed process: $command_file"
+        log "Process result: $command_file status=success exit_code=0 provider=codex model=$CODEX_MODEL"
+        return 0
+    fi
+
+    log "ERROR: Codex provider exited with code $rc for $command_file"
+    notify "⚠️ Экзокортекс: ошибка Codex fallback" "extractor/$command_file завершился с кодом $rc"
+    return "$rc"
+}
+
 run_claude() {
     local command_file="$1"
     local extra_args="${2:-}"
@@ -173,19 +232,6 @@ run_claude() {
     if [ ! -f "$command_path" ]; then
         log "ERROR: Command file not found: $command_path"
         exit 1
-    fi
-
-    local resolved_cli
-    resolved_cli=$(resolve_claude_path) || {
-        log "ERROR: Claude CLI not found"
-        notify "🔴 Экзокортекс: Claude CLI не найден" "Extractor/$command_file не может стартовать: claude не найден"
-        return 11
-    }
-
-    if ! preflight_check "$resolved_cli"; then
-        local code=$?
-        notify "🔴 Экзокортекс: preflight failed" "Extractor/$command_file не стартовал: проверь helper/env/claude"
-        return "$code"
     fi
 
     local prompt
@@ -197,6 +243,27 @@ run_claude() {
 ## Дополнительный контекст
 
 $extra_args"
+    fi
+
+    local resolved_cli
+    resolved_cli=$(resolve_claude_path) || {
+        log "ERROR: Claude CLI not found"
+        if has_codex_fallback; then
+            run_codex_provider "$command_file" "$prompt" "claude_cli_missing"
+            return $?
+        fi
+        notify "🔴 Экзокортекс: Claude CLI не найден" "Extractor/$command_file не может стартовать: claude не найден"
+        return 11
+    }
+
+    if ! preflight_check "$resolved_cli"; then
+        local code=$?
+        if has_codex_fallback; then
+            run_codex_provider "$command_file" "$prompt" "claude_preflight_failed"
+            return $?
+        fi
+        notify "🔴 Экзокортекс: preflight failed" "Extractor/$command_file не стартовал: проверь helper/env/claude"
+        return "$code"
     fi
 
     log "Starting process: $command_file"
@@ -242,7 +309,12 @@ $extra_args"
         cat "$tmp_out" >> "$LOG_FILE"
 
         if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set' "$tmp_out" 2>/dev/null; then
-            log "CRITICAL: Auth failed via helper/env/custom API"
+            log "CRITICAL: Claude auth failed via helper/env/custom API"
+            if has_codex_fallback; then
+                rm -f "$tmp_out"
+                run_codex_provider "$command_file" "$prompt" "claude_auth_failed"
+                return $?
+            fi
             notify "🔴 Экзокортекс: auth failure" "Агент $command_file упал: проверь ~/.config/aist/env и helper"
             notify_telegram "$command_file"
             rm -f "$tmp_out"
@@ -256,11 +328,19 @@ $extra_args"
             break
         fi
 
-        if [ "$attempt_index" -lt "$total_attempts" ] && is_model_unavailable_error "$tmp_out"; then
-            local next_model="${model_candidates[$attempt_index]}"
-            log "WARN: model unavailable for $command_file on $attempt_model — falling back to $next_model"
-            rm -f "$tmp_out"
-            continue
+        if is_model_unavailable_error "$tmp_out"; then
+            if [ "$attempt_index" -lt "$total_attempts" ]; then
+                local next_model="${model_candidates[$attempt_index]}"
+                log "WARN: model unavailable for $command_file on $attempt_model — falling back to $next_model"
+                rm -f "$tmp_out"
+                continue
+            fi
+
+            if has_codex_fallback; then
+                rm -f "$tmp_out"
+                run_codex_provider "$command_file" "$prompt" "claude_models_unavailable"
+                return $?
+            fi
         fi
 
         rm -f "$tmp_out"

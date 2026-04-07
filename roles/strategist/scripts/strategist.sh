@@ -22,6 +22,8 @@ CLAUDE_PATH="${CLAUDE_PATH:-$HOME/.local/bin/claude}"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude CLI
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
 AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
+AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
 [ -n "$GITHUB_USER" ] || GITHUB_USER="AlexPoAi"
 
@@ -30,8 +32,18 @@ if [ ! -x "$CLAUDE_PATH" ]; then
     CLAUDE_PATH="$(command -v claude 2>/dev/null || true)"
 fi
 
-if [ -z "$CLAUDE_PATH" ] || [ ! -x "$CLAUDE_PATH" ]; then
-    echo "ERROR: Claude CLI not found. Expected \$HOME/.local/bin/claude or command -v claude" >&2
+CODEX_PATH="${CODEX_PATH:-$(command -v codex 2>/dev/null || true)}"
+
+if [ -n "$CLAUDE_PATH" ] && [ ! -x "$CLAUDE_PATH" ]; then
+    CLAUDE_PATH=""
+fi
+
+if [ -n "$CODEX_PATH" ] && [ ! -x "$CODEX_PATH" ]; then
+    CODEX_PATH=""
+fi
+
+if [ -z "$CLAUDE_PATH" ] && [ -z "$CODEX_PATH" ]; then
+    echo "ERROR: Neither Claude CLI nor Codex CLI is available." >&2
     exit 1
 fi
 
@@ -88,6 +100,10 @@ notify_telegram_text() {
     NOTIFY_TEXT="$text" "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist "$scenario" >> "$LOG_FILE" 2>&1 || true
 }
 
+has_codex_fallback() {
+    [ "${AI_CLI_PROVIDER_FALLBACK}" = "codex" ] && [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]
+}
+
 fail_day_close_headless() {
     local message="day-close requires an interactive protocol-close session and is no longer supported via headless strategist.sh. Use the canonical close route instead."
     log "ERROR: $message"
@@ -131,6 +147,49 @@ build_model_candidates() {
 is_model_unavailable_error() {
     local output_file="$1"
     grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error|API Error: 400 .*"code":"E005".*"Invalid request"|invalid_request_error' "$output_file" 2>/dev/null
+}
+
+run_codex_provider() {
+    local command_file="$1"
+    local prompt="$2"
+    local reason="${3:-claude_unavailable}"
+    local tmp_out tmp_msg rc=0
+
+    if ! has_codex_fallback; then
+        return 1
+    fi
+
+    tmp_out=$(mktemp)
+    tmp_msg=$(mktemp)
+
+    log "WARN: falling back to Codex for $command_file (reason=$reason, model=$CODEX_MODEL)"
+    "$CODEX_PATH" exec \
+        --skip-git-repo-check \
+        -C "$WORKSPACE" \
+        --output-last-message "$tmp_msg" \
+        --sandbox danger-full-access \
+        -m "$CODEX_MODEL" \
+        "$prompt" \
+        > "$tmp_out" 2>&1 || rc=$?
+
+    cat "$tmp_out" >> "$LOG_FILE"
+    if [ -s "$tmp_msg" ]; then
+        printf '\n' >> "$LOG_FILE"
+        cat "$tmp_msg" >> "$LOG_FILE"
+        printf '\n' >> "$LOG_FILE"
+    fi
+
+    rm -f "$tmp_out" "$tmp_msg"
+
+    if [ "$rc" -eq 0 ]; then
+        log "Completed scenario: $command_file"
+        log "Scenario result: $command_file status=success exit_code=0 provider=codex model=$CODEX_MODEL"
+        return 0
+    fi
+
+    log "ERROR: Codex provider exited with code $rc for scenario: $command_file"
+    log "Scenario result: $command_file status=failed exit_code=$rc provider=codex model=$CODEX_MODEL"
+    return "$rc"
 }
 
 resolve_command_path() {
@@ -193,6 +252,16 @@ ${prompt}"
 
     cd "$WORKSPACE"
 
+    if [ -z "$CLAUDE_PATH" ] || [ ! -x "$CLAUDE_PATH" ]; then
+        log "WARN: Claude CLI unavailable for $command_file"
+        if has_codex_fallback; then
+            run_codex_provider "$command_file" "$prompt" "claude_cli_missing"
+            return $?
+        fi
+        log "ERROR: Claude CLI not found and Codex fallback unavailable"
+        return 11
+    fi
+
     local -a model_candidates=()
     local candidate
     while IFS= read -r candidate; do
@@ -224,7 +293,12 @@ ${prompt}"
         cat "$tmp_out" >> "$LOG_FILE"
 
         if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled' "$tmp_out" 2>/dev/null; then
-            log "CRITICAL: Auth failed for scenario: $command_file — требуется claude /login"
+            log "CRITICAL: Claude auth failed for scenario: $command_file"
+            if has_codex_fallback; then
+                rm -f "$tmp_out"
+                run_codex_provider "$command_file" "$prompt" "claude_auth_failed"
+                return $?
+            fi
             notify "🔴 Экзокортекс: AUTH FAILURE" "Стратег/$command_file: токен истёк. Запусти: claude /login"
             notify_telegram_text "auth-failure" "🔴 <b>Strategist auth failure</b>\n\nСценарий: <b>$command_file</b>\nДействие: выполнить <code>claude /login</code> и повторить запуск."
             rm -f "$tmp_out"
@@ -238,11 +312,19 @@ ${prompt}"
             break
         fi
 
-        if [ "$attempt_index" -lt "$total_attempts" ] && is_model_unavailable_error "$tmp_out"; then
-            local next_model="${model_candidates[$attempt_index]}"
-            log "WARN: model unavailable for $command_file on $attempt_model — falling back to $next_model"
-            rm -f "$tmp_out"
-            continue
+        if is_model_unavailable_error "$tmp_out"; then
+            if [ "$attempt_index" -lt "$total_attempts" ]; then
+                local next_model="${model_candidates[$attempt_index]}"
+                log "WARN: model unavailable for $command_file on $attempt_model — falling back to $next_model"
+                rm -f "$tmp_out"
+                continue
+            fi
+
+            if has_codex_fallback; then
+                rm -f "$tmp_out"
+                run_codex_provider "$command_file" "$prompt" "claude_models_unavailable"
+                return $?
+            fi
         fi
 
         rm -f "$tmp_out"
