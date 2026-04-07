@@ -15,6 +15,7 @@ STATE_DIR="$HOME/.local/state/exocortex"
 STATUS_DIR="$STATE_DIR/status"
 WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
 CANONICAL_MEMORY_DIR="$WORKSPACE_DIR/memory"
+OPENING_CONTRACT_CHECK_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/opening-contract-check.sh"
 RUNTIME_ARBITER_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
 RUNTIME_POLICY_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-POLICY.env"
 RUNTIME_MODE_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-MODE.md"
@@ -172,6 +173,52 @@ check_protocol_contract() {
     if [ "$missing" -eq 0 ]; then
         log "ОК: canonical protocol routes resolved from $CANONICAL_MEMORY_DIR"
     fi
+}
+
+check_opening_contract() {
+    local tmp_output rc
+
+    if [ ! -x "$OPENING_CONTRACT_CHECK_PATH" ]; then
+        WARNINGS+=("🟡 Opening contract check missing: $OPENING_CONTRACT_CHECK_PATH")
+        log "ВНИМАНИЕ: opening contract check missing: $OPENING_CONTRACT_CHECK_PATH"
+        return
+    fi
+
+    tmp_output=$(mktemp)
+    rc=0
+    if ! bash "$OPENING_CONTRACT_CHECK_PATH" >"$tmp_output" 2>&1; then
+        rc=$?
+    fi
+
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        case "$line" in
+            OK\ *)
+                log "ОК: ${line#OK }"
+                ;;
+            WARN\ *)
+                WARNINGS+=("🟡 Opening contract: ${line#WARN }")
+                log "ВНИМАНИЕ: opening contract ${line#WARN }"
+                ;;
+            ERROR\ *)
+                ERRORS+=("🔴 Opening contract: ${line#ERROR }")
+                log "ОШИБКА: opening contract ${line#ERROR }"
+                ;;
+            *)
+                log "INFO: opening contract $line"
+                ;;
+        esac
+    done <"$tmp_output"
+
+    rm -f "$tmp_output"
+
+    case "$rc" in
+        0|1|2) ;;
+        *)
+            WARNINGS+=("🟡 Opening contract check exited unexpectedly: rc=$rc")
+            log "ВНИМАНИЕ: opening contract check exited unexpectedly: rc=$rc"
+            ;;
+    esac
 }
 
 load_runtime_status() {
@@ -382,6 +429,7 @@ else
 fi
 
 check_protocol_contract
+check_opening_contract
 check_runtime_contract
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
