@@ -4,7 +4,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WORKSPACE="{{HOME_DIR}}/Github"
+WORKSPACE="$HOME/Github"
+if [[ "$WORKSPACE" == *"{{HOME_DIR}}"* ]] || [ ! -d "$WORKSPACE" ]; then
+    if [ -d "$HOME/Github" ]; then
+        WORKSPACE="$HOME/Github"
+    elif [ -d "$HOME/IWE" ]; then
+        WORKSPACE="$HOME/IWE"
+    fi
+fi
 LOG_DIR="$HOME/logs/synchronizer"
 DATE=$(date +%Y-%m-%d)
 LOG_FILE="$LOG_DIR/code-scan-$DATE.log"
@@ -33,6 +40,10 @@ discover_repos() {
         [ "$skip" = true ] && continue
         repos+=("$dir")
     done
+
+    if [ "${#repos[@]}" -eq 0 ]; then
+        return 0
+    fi
 
     printf '%s\n' "${repos[@]}"
 }
