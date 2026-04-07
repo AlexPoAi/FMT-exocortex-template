@@ -16,6 +16,7 @@ AI_CLI_PROMPT_FLAG="${AI_CLI_PROMPT_FLAG:--p}"
 AI_CLI_MODEL="${AI_CLI_MODEL:-}"
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
 AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
+AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-codex}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
@@ -90,6 +91,10 @@ resolve_codex_path() {
 
 has_codex_fallback() {
     [ "${AI_CLI_PROVIDER_FALLBACK}" = "codex" ] && resolve_codex_path >/dev/null 2>&1
+}
+
+uses_codex_as_primary() {
+    [ "${AI_CLI_PROVIDER_PRIMARY}" = "codex" ] && resolve_codex_path >/dev/null 2>&1
 }
 
 preflight_check() {
@@ -268,10 +273,18 @@ $extra_args"
 
     log "Starting process: $command_file"
     log "Command file: $command_path"
-    log "Claude path: $resolved_cli"
 
     cd "$WORKSPACE"
     unset CLAUDECODE
+
+    if uses_codex_as_primary; then
+        if run_codex_provider "$command_file" "$prompt" "primary_provider"; then
+            return 0
+        fi
+        log "WARN: Codex primary failed for $command_file — falling back to Claude provider"
+    fi
+
+    log "Claude path: $resolved_cli"
 
     local -a model_candidates=()
     local candidate

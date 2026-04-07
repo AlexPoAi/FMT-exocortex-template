@@ -144,7 +144,7 @@ claude
 ## FAQ
 
 **Q: Нужна ли подписка Anthropic?**
-A: Для полной установки (Claude Code) — рекомендуется Claude Pro ($20/мес). Для минимальной (`setup.sh --core`) — работает с любым AI CLI. Подробнее: [SETUP-GUIDE.md](docs/SETUP-GUIDE.md).
+A: Нет, не обязательно. Для локального агентного слоя сейчас нормальный путь — Codex/OpenAI CLI. Claude тоже поддерживается и может выступать fallback-provider'ом. Для минимальной (`setup.sh --core`) система вообще работает с любым AI CLI. Подробнее: [SETUP-GUIDE.md](docs/SETUP-GUIDE.md).
 
 **Q: Работает ли с другими ИИ (не Claude)?**
 A: Да. Ядро IWE — markdown-файлы. Работает с Claude Code, Codex (OpenAI), Aider и другими AI CLI. Подробнее: [SETUP-GUIDE.md](docs/SETUP-GUIDE.md).

@@ -22,6 +22,7 @@ CLAUDE_PATH="${CLAUDE_PATH:-$HOME/.local/bin/claude}"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude CLI
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
 AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
+AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-codex}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
@@ -102,6 +103,10 @@ notify_telegram_text() {
 
 has_codex_fallback() {
     [ "${AI_CLI_PROVIDER_FALLBACK}" = "codex" ] && [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]
+}
+
+uses_codex_as_primary() {
+    [ "${AI_CLI_PROVIDER_PRIMARY}" = "codex" ] && [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]
 }
 
 fail_day_close_headless() {
@@ -251,6 +256,13 @@ ${prompt}"
     log "Date context: $ru_date_context"
 
     cd "$WORKSPACE"
+
+    if uses_codex_as_primary; then
+        if run_codex_provider "$command_file" "$prompt" "primary_provider"; then
+            return 0
+        fi
+        log "WARN: Codex primary failed for $command_file — falling back to Claude provider"
+    fi
 
     if [ -z "$CLAUDE_PATH" ] || [ ! -x "$CLAUDE_PATH" ]; then
         log "WARN: Claude CLI unavailable for $command_file"
