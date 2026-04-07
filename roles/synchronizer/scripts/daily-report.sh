@@ -191,6 +191,67 @@ task_missing_is_expected() {
     esac
 }
 
+status_updated_epoch() {
+    local ref_ts
+    ref_ts=$(task_reference_ts)
+    timestamp_to_epoch "$ref_ts"
+}
+
+apply_legacy_marker_override() {
+    local task="$1"
+    local current_epoch marker_epoch marker_ts marker_file week_file
+
+    current_epoch=$(status_updated_epoch)
+
+    marker_file="$STATE_DIR/${task}-$DATE"
+    if [ -f "$marker_file" ]; then
+        marker_ts="$DATE $(cat "$marker_file")"
+        marker_epoch=$(timestamp_to_epoch "$marker_ts")
+        if [ "$marker_epoch" -gt "${current_epoch:-0}" ]; then
+            STATUS="success"
+            EXIT_CODE="0"
+            UPDATED_AT="$marker_ts"
+            END_TS="$marker_ts"
+            SUMMARY="derived from fresh daily marker"
+            EVIDENCE_STATUS="derived"
+            EVIDENCE_SUMMARY="fresh daily marker"
+            return
+        fi
+    fi
+
+    if [ "$task" = "strategist-week-review" ]; then
+        week_file="$STATE_DIR/${task}-W$WEEK"
+        if [ -f "$week_file" ]; then
+            marker_ts="$(cat "$week_file")"
+            marker_epoch=$(timestamp_to_epoch "$marker_ts")
+            if [ "$marker_epoch" -gt "${current_epoch:-0}" ]; then
+                STATUS="success"
+                EXIT_CODE="0"
+                UPDATED_AT="$marker_ts"
+                END_TS="$marker_ts"
+                SUMMARY="derived from fresh weekly marker"
+                EVIDENCE_STATUS="derived"
+                EVIDENCE_SUMMARY="fresh weekly marker"
+                return
+            fi
+        fi
+    fi
+
+    if [ "$task" = "extractor-inbox-check" ] && [ -f "$STATE_DIR/${task}-last" ]; then
+        marker_ts="$(date -r "$(cat "$STATE_DIR/${task}-last")" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || true)"
+        marker_epoch=$(timestamp_to_epoch "$marker_ts")
+        if [ "$marker_epoch" -gt "${current_epoch:-0}" ]; then
+            STATUS="success"
+            EXIT_CODE="0"
+            UPDATED_AT="$marker_ts"
+            END_TS="$marker_ts"
+            SUMMARY="derived from fresh interval marker"
+            EVIDENCE_STATUS="derived"
+            EVIDENCE_SUMMARY="fresh interval marker"
+        fi
+    fi
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -219,12 +280,19 @@ load_status() {
         EVIDENCE_SUMMARY="legacy interval marker"
     fi
 
+    apply_legacy_marker_override "$task"
+
     local ref_ts
     ref_ts=$(task_reference_ts)
     if [ "$STATUS" != "missing" ] && ! task_status_is_current "$task" "$ref_ts"; then
         STATUS="stale"
         EXIT_CODE=""
         SUMMARY="status artifact from previous window"
+    fi
+
+    if [ "$STATUS" = "stale" ] && task_missing_is_expected "$task"; then
+        STATUS="missing"
+        SUMMARY="task not scheduled in current window"
     fi
 }
 
@@ -355,6 +423,11 @@ build_agents_status() {
 
     for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
         load_status "$task"
+
+        if [ "$STATUS" = "missing" ] && task_missing_is_expected "$task"; then
+            continue
+        fi
+
         case "$task" in
             strategist-*)
                 case "$STATUS" in
