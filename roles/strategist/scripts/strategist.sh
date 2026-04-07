@@ -177,6 +177,33 @@ is_model_unavailable_error() {
     grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error|API Error: 400 .*"code":"E005".*"Invalid request"|invalid_request_error' "$output_file" 2>/dev/null
 }
 
+count_bold_notes() {
+    local file="$1"
+    [ -f "$file" ] || {
+        printf '0\n'
+        return
+    }
+    awk '/^\*\*/ {count++} END {print count+0}' "$file"
+}
+
+count_new_bold_notes() {
+    local file="$1"
+    [ -f "$file" ] || {
+        printf '0\n'
+        return
+    }
+    awk '/^\*\*/ && $0 !~ /🔄/ {count++} END {print count+0}' "$file"
+}
+
+count_non_bold_content_lines() {
+    local file="$1"
+    [ -f "$file" ] || {
+        printf '0\n'
+        return
+    }
+    awk '/^[^*#>-]/ {count++} END {print count+0}' "$file"
+}
+
 claude_reauth_hint() {
     local cli_name="${CLAUDE_PATH##*/}"
     [ -n "$cli_name" ] || cli_name="claude"
@@ -519,17 +546,20 @@ case "$1" in
         log "Evening: running note review"
         # Canary: count bold notes before (exclude 🔄 — deferred ideas stay bold by design)
         FLEETING="$WORKSPACE/inbox/fleeting-notes.md"
-        BOLD_BEFORE=$(grep -c '^\*\*' "$FLEETING" 2>/dev/null || echo 0)
-        BOLD_NEW_BEFORE=$(grep '^\*\*' "$FLEETING" 2>/dev/null | grep -v '🔄' | grep -c '.' || echo 0)
+        if [ ! -f "$FLEETING" ]; then
+            log "WARN: fleeting-notes.md not found at $FLEETING — note-review canary will use zero counts"
+        fi
+        BOLD_BEFORE=$(count_bold_notes "$FLEETING")
+        BOLD_NEW_BEFORE=$(count_new_bold_notes "$FLEETING")
         log "Canary: $BOLD_BEFORE bold total ($BOLD_NEW_BEFORE new, $(( BOLD_BEFORE - BOLD_NEW_BEFORE )) deferred 🔄)"
 
         run_claude "note-review"
 
         # Canary: count bold notes after — only NEW bold (without 🔄) should decrease
-        BOLD_AFTER=$(grep -c '^\*\*' "$FLEETING" 2>/dev/null || echo 0)
-        BOLD_NEW_AFTER=$(grep '^\*\*' "$FLEETING" 2>/dev/null | grep -v '🔄' | grep -c '.' || echo 0)
+        BOLD_AFTER=$(count_bold_notes "$FLEETING")
+        BOLD_NEW_AFTER=$(count_new_bold_notes "$FLEETING")
         log "Canary: $BOLD_AFTER bold total ($BOLD_NEW_AFTER new)"
-        NON_BOLD=$(grep -c '^[^*#>-]' "$FLEETING" 2>/dev/null || echo 0)
+        NON_BOLD=$(count_non_bold_content_lines "$FLEETING")
         log "Non-bold content lines: $NON_BOLD"
         if [ "$BOLD_NEW_AFTER" -ge "$BOLD_NEW_BEFORE" ] && [ "$BOLD_NEW_BEFORE" -gt 0 ]; then
             log "WARN: Note-Review Step 10 may have failed — new bold notes did not decrease ($BOLD_NEW_BEFORE → $BOLD_NEW_AFTER)"
@@ -537,7 +567,7 @@ case "$1" in
 
         # Deterministic cleanup: archive non-bold, non-🔄 notes (safety net for LLM Step 10)
         log "Running deterministic cleanup..."
-        CLEANUP_OUTPUT=$(python3 "$SCRIPT_DIR/cleanup-processed-notes.py" 2>&1) || true
+        CLEANUP_OUTPUT=$("$SCRIPT_DIR/cleanup-processed-notes.sh" 2>&1) || true
         log "Cleanup: $CLEANUP_OUTPUT"
 
         # If cleanup made changes, commit and push
