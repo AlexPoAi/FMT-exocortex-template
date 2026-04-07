@@ -191,6 +191,19 @@ task_missing_is_expected() {
     esac
 }
 
+task_should_be_marked_missed_window() {
+    local task="$1"
+
+    case "$task" in
+        strategist-morning)
+            (( 10#$HOUR >= 22 )) && [ ! -f "$STATE_DIR/${task}-$DATE" ]
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 status_updated_epoch() {
     local ref_ts
     ref_ts=$(task_reference_ts)
@@ -294,6 +307,12 @@ load_status() {
         STATUS="missing"
         SUMMARY="task not scheduled in current window"
     fi
+
+    if task_should_be_marked_missed_window "$task"; then
+        STATUS="missed_window"
+        EXIT_CODE=""
+        SUMMARY="today execution window missed; next recovery is next scheduled run"
+    fi
 }
 
 task_display_name() {
@@ -313,6 +332,7 @@ task_human_status() {
         success) echo "✅ успех" ;;
         running) echo "🔵 выполняется" ;;
         skipped) echo "⚪️ пропущен по правилу" ;;
+        missed_window) echo "🟡 окно на сегодня уже пропущено" ;;
         stale) echo "🟡 устаревший или неполный статус" ;;
         missing) echo "⚪️ нет статуса" ;;
         failed) echo "🔴 ошибка" ;;
@@ -436,6 +456,10 @@ build_agents_status() {
                         brain="🟡 требует внимания"
                         ;;
                     stale)
+                        [ "$strategist" = "🟢 зелёный" ] && strategist="🟡 требует внимания"
+                        brain="🟡 требует внимания"
+                        ;;
+                    missed_window)
                         [ "$strategist" = "🟢 зелёный" ] && strategist="🟡 требует внимания"
                         brain="🟡 требует внимания"
                         ;;
@@ -579,6 +603,12 @@ build_session_open() {
                 [ "$verdict_color" = "🟢 green" ] && verdict_color="🟡 yellow"
                 [ "$verdict_label" = "Мозг экзокортекса — готов к работе" ] && verdict_label="Мозг экзокортекса — требует внимания"
                 stale_list="${stale_list}- $(task_display_name "$task"): stale\n"
+                ;;
+            missed_window)
+                [ "$verdict_emoji" = "🟢" ] && verdict_emoji="🟡"
+                [ "$verdict_color" = "🟢 green" ] && verdict_color="🟡 yellow"
+                [ "$verdict_label" = "Мозг экзокортекса — готов к работе" ] && verdict_label="Мозг экзокортекса — требует внимания"
+                stale_list="${stale_list}- $(task_display_name "$task"): сегодняшнее окно выполнения уже закрыто\n"
                 ;;
         esac
     done

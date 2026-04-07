@@ -137,6 +137,19 @@ task_missing_is_expected() {
     esac
 }
 
+task_should_be_marked_missed_window() {
+    local task="$1"
+
+    case "$task" in
+        strategist-morning)
+            (( 10#$HOUR >= 22 )) && [ ! -f "$STATE_DIR/${task}-$DATE" ]
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 default_staleness_budget_for() {
     case "$1" in
         extractor-inbox-check) echo 10800 ;;
@@ -393,6 +406,12 @@ load_status() {
         STATUS="missing"
         SUMMARY="task not scheduled in current window"
     fi
+
+    if task_should_be_marked_missed_window "$task"; then
+        STATUS="missed_window"
+        EXIT_CODE=""
+        SUMMARY="today execution window missed; next recovery is next scheduled run"
+    fi
 }
 
 ERRORS=()
@@ -447,6 +466,10 @@ for task in strategist-morning strategist-note-review strategist-week-review syn
         stale)
             STALE+=("$(agent_display_name "$task")")
             log "УСТАРЕЛ: $task (норма после перезагрузки)"
+            ;;
+        missed_window)
+            STALE+=("$(agent_display_name "$task") — окно на сегодня уже закрыто")
+            log "ПРОПУЩЕНО ОКНО: $task (сегодняшнее окно уже закрыто, восстановление при следующем плановом запуске)"
             ;;
         *)
             human_status=$(printf '%s' "$STATUS" | sed \
