@@ -362,6 +362,14 @@ if [ ${#ERRORS[@]} -eq 0 ] && [ ${#WARNINGS[@]} -eq 0 ] && [ ${#STALE[@]} -eq 0 
     exit 0
 fi
 
+if [ ${#ERRORS[@]} -eq 0 ] && [ ${#WARNINGS[@]} -eq 0 ] && [ ${#STALE[@]} -gt 0 ]; then
+    stale_list=$(printf '%s, ' "${STALE[@]}")
+    stale_list="${stale_list%, }"
+    log "ℹ️ Только stale-статусы: $stale_list"
+    log "Telegram-уведомление suppressed: stale-only health-check не должен перекрывать дневной отчёт"
+    exit 0
+fi
+
 if [ ${#ERRORS[@]} -gt 0 ]; then
     log "❌ Найдено ${#ERRORS[@]} критических проблем и ${#WARNINGS[@]} предупреждений"
 else
