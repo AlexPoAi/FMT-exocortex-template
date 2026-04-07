@@ -13,6 +13,8 @@ LOG_FILE="$LOG_DIR/$DATE.log"
 ENV_FILE="$HOME/.config/aist/env"
 STATE_DIR="$HOME/.local/state/exocortex"
 STATUS_DIR="$STATE_DIR/status"
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
+CANONICAL_MEMORY_DIR="$WORKSPACE_DIR/memory"
 
 mkdir -p "$LOG_DIR"
 
@@ -141,6 +143,34 @@ default_staleness_budget_for() {
     esac
 }
 
+check_protocol_contract() {
+    local missing=0
+
+    if [ -L "$CANONICAL_MEMORY_DIR" ] && [ ! -e "$CANONICAL_MEMORY_DIR" ]; then
+        ERRORS+=("🔴 Canonical memory path broken: $CANONICAL_MEMORY_DIR")
+        log "ОШИБКА: broken symlink for canonical memory path: $CANONICAL_MEMORY_DIR"
+        return
+    fi
+
+    if [ ! -d "$CANONICAL_MEMORY_DIR" ]; then
+        ERRORS+=("🔴 Canonical memory path missing: $CANONICAL_MEMORY_DIR")
+        log "ОШИБКА: canonical memory path missing: $CANONICAL_MEMORY_DIR"
+        return
+    fi
+
+    for protocol in protocol-open.md protocol-work.md protocol-close.md; do
+        if [ ! -f "$CANONICAL_MEMORY_DIR/$protocol" ]; then
+            ERRORS+=("🔴 Canonical protocol missing: memory/$protocol")
+            log "ОШИБКА: canonical protocol missing: $CANONICAL_MEMORY_DIR/$protocol"
+            missing=1
+        fi
+    done
+
+    if [ "$missing" -eq 0 ]; then
+        log "ОК: canonical protocol routes resolved from $CANONICAL_MEMORY_DIR"
+    fi
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -212,6 +242,8 @@ else
     ERRORS+=("🔴 Помощник авторизации или env-слой сломан")
     log "ОШИБКА: помощник авторизации или env-слой сломан"
 fi
+
+check_protocol_contract
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
     load_status "$task"

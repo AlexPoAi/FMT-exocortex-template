@@ -17,6 +17,8 @@ STATE_DIR="$HOME/.local/state/exocortex"
 STATUS_DIR="$STATE_DIR/status"
 LOG_DIR="$HOME/logs/synchronizer"
 STRATEGY_DIR="$HOME/Github/DS-strategy"
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
+CANONICAL_MEMORY_DIR="$WORKSPACE_DIR/memory"
 
 # Agent Workspace: если существует — отчёты идут туда
 AGENT_WORKSPACE="$HOME/Github/DS-agent-workspace"
@@ -227,6 +229,27 @@ task_human_status() {
     esac
 }
 
+protocol_contract_status() {
+    if [ -L "$CANONICAL_MEMORY_DIR" ] && [ ! -e "$CANONICAL_MEMORY_DIR" ]; then
+        echo "broken"
+        return
+    fi
+
+    if [ ! -d "$CANONICAL_MEMORY_DIR" ]; then
+        echo "missing"
+        return
+    fi
+
+    for protocol in protocol-open.md protocol-work.md protocol-close.md; do
+        if [ ! -f "$CANONICAL_MEMORY_DIR/$protocol" ]; then
+            echo "missing"
+            return
+        fi
+    done
+
+    echo "ok"
+}
+
 build_agents_status() {
     local strategist="🟢 зелёный"
     local extractor="🟢 зелёный"
@@ -234,8 +257,17 @@ build_agents_status() {
     local sync="🟢 зелёный"
     local auth="🟢 зелёный"
     local brain="🟢 зелёный"
+    local protocol_contract="🟢 зелёный"
     local updated
     updated="$(date '+%Y-%m-%d %H:%M')"
+
+    case "$(protocol_contract_status)" in
+        ok) ;;
+        *)
+            protocol_contract="🔴 требует внимания"
+            brain="🟡 требует внимания"
+            ;;
+    esac
 
     for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
         load_status "$task"
@@ -288,6 +320,7 @@ build_agents_status() {
 - Планировщик: **$scheduler**
 - Проверка среды: **🟢 зелёный**
 - Помощник авторизации: **$auth**
+- Canonical protocol route: **$protocol_contract**
 - Статус-артефакты: **$sync**
 - Стратег: **$strategist**
 - Экстрактор: **$extractor**
@@ -308,8 +341,27 @@ build_session_open() {
     local verdict_color="🟢 green"
     local issues=""
     local stale_list=""
+    local protocol_route_status="🟢 green"
     local updated
     updated="$(date '+%Y-%m-%d %H:%M:%S')"
+
+    case "$(protocol_contract_status)" in
+        ok) ;;
+        broken)
+            verdict_emoji="🔴"
+            verdict_label="Мозг экзокортекса — требует внимания"
+            verdict_color="🔴 red"
+            protocol_route_status="🔴 red"
+            issues="${issues}- Canonical protocol route broken: $CANONICAL_MEMORY_DIR\n"
+            ;;
+        missing)
+            verdict_emoji="🔴"
+            verdict_label="Мозг экзокортекса — требует внимания"
+            verdict_color="🔴 red"
+            protocol_route_status="🔴 red"
+            issues="${issues}- Canonical protocol route incomplete: expected memory/protocol-open.md, memory/protocol-work.md, memory/protocol-close.md under $CANONICAL_MEMORY_DIR\n"
+            ;;
+    esac
 
     for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
         load_status "$task"
@@ -352,6 +404,7 @@ build_session_open() {
 - Планировщик: **🟢 green**
 - Проверка среды: **🟢 green**
 - Помощник авторизации: **🟢 green**
+- Canonical protocol route: **$protocol_route_status**
 - Статус-артефакты: **$( [ "$verdict_emoji" = "🔴" ] && echo "🔴 red" || [ "$verdict_emoji" = "🟡" ] && echo "🟡 yellow" || echo "🟢 green")**
 
 ## Задачи агентов
