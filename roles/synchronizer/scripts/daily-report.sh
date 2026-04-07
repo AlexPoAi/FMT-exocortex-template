@@ -340,6 +340,33 @@ task_human_status() {
     esac
 }
 
+task_reference_display() {
+    if [ "${STATUS:-}" = "missed_window" ]; then
+        echo "окно закрыто"
+        return
+    fi
+
+    local ref_ts
+    ref_ts=$(task_reference_ts)
+    if [ -n "$ref_ts" ]; then
+        printf '%s' "$ref_ts" | awk '{print $2}'
+    else
+        echo "—"
+    fi
+}
+
+task_report_table_status() {
+    case "$1" in
+        success) echo "**✅**" ;;
+        running) echo "**🔵**" ;;
+        skipped) echo "**⚪️**" ;;
+        missed_window) echo "**🟡**" ;;
+        stale) echo "**🟡**" ;;
+        missing|failed) echo "**❌**" ;;
+        *) echo "**🟡**" ;;
+    esac
+}
+
 protocol_contract_status() {
     if [ -L "$CANONICAL_MEMORY_DIR" ] && [ ! -e "$CANONICAL_MEMORY_DIR" ]; then
         echo "broken"
@@ -669,31 +696,72 @@ EOF
 compute_traffic_light() {
     local color="GREEN"
     local issues=""
+    local status
 
-    if ! check_ran "synchronizer-code-scan" &>/dev/null; then
-        color="RED"
-        issues+="code-scan не запустился; "
-    fi
+    load_status "synchronizer-code-scan"
+    status="$STATUS"
+    case "$status" in
+        failed|missing)
+            color="RED"
+            issues+="code-scan не запустился; "
+            ;;
+        stale)
+            [ "$color" = "GREEN" ] && color="YELLOW"
+            issues+="code-scan status устарел; "
+            ;;
+    esac
 
-    if (( 10#$HOUR >= 6 )) && ! check_ran "strategist-morning" &>/dev/null; then
-        color="RED"
-        issues+="strategist morning не запустился; "
-    fi
+    load_status "strategist-morning"
+    status="$STATUS"
+    case "$status" in
+        failed|missing)
+            color="RED"
+            issues+="strategist morning не запустился; "
+            ;;
+        missed_window)
+            [ "$color" = "GREEN" ] && color="YELLOW"
+            issues+="утреннее окно strategist на сегодня уже пропущено; "
+            ;;
+        stale)
+            [ "$color" = "GREEN" ] && color="YELLOW"
+            issues+="strategist morning status устарел; "
+            ;;
+    esac
 
     if [ -f "$SCHEDULER_LOG" ] && grep -q "push failed" "$SCHEDULER_LOG" 2>/dev/null; then
         if [ "$color" = "GREEN" ]; then color="YELLOW"; fi
         issues+="push failed (Mac оффлайн?); "
     fi
 
-    if (( 10#$HOUR >= 23 )) && ! check_ran "strategist-note-review" &>/dev/null; then
-        if [ "$color" = "GREEN" ]; then color="YELLOW"; fi
-        issues+="note-review не запустился; "
-    fi
+    load_status "strategist-note-review"
+    status="$STATUS"
+    case "$status" in
+        failed|missing)
+            if ! task_missing_is_expected "strategist-note-review"; then
+                [ "$color" = "GREEN" ] && color="YELLOW"
+                issues+="note-review не запустился; "
+            fi
+            ;;
+        stale)
+            [ "$color" = "GREEN" ] && color="YELLOW"
+            issues+="note-review status устарел; "
+            ;;
+    esac
 
-    if [ "$DOW" = "1" ] && ! check_ran_week "strategist-week-review" &>/dev/null; then
-        if [ "$color" = "GREEN" ]; then color="YELLOW"; fi
-        issues+="week-review не запустился (Пн!); "
-    fi
+    load_status "strategist-week-review"
+    status="$STATUS"
+    case "$status" in
+        failed|missing)
+            if ! task_missing_is_expected "strategist-week-review"; then
+                [ "$color" = "GREEN" ] && color="YELLOW"
+                issues+="week-review не запустился (Пн!); "
+            fi
+            ;;
+        stale)
+            [ "$color" = "GREEN" ] && color="YELLOW"
+            issues+="week-review status устарел; "
+            ;;
+    esac
 
     local emoji label
     case "$color" in
@@ -740,58 +808,33 @@ agent: Синхронизатор
 |---|--------|--------|-------|"
 
     # 1. Code-scan
-    local cs_time
-    if cs_time=$(check_ran "synchronizer-code-scan"); then
-        report+="
-| 1 | Сканирование кода | **✅** | $cs_time |"
-    else
-        report+="
-| 1 | Сканирование кода | **❌** | — |"
-    fi
+    load_status "synchronizer-code-scan"
+    report+="
+| 1 | Сканирование кода | $(task_report_table_status "$STATUS") | $(task_reference_display) |"
 
     # 2. Стратег утренний
-    local sm_time
-    if sm_time=$(check_ran "strategist-morning"); then
-        report+="
-| 2 | Стратег утренний | **✅** | $sm_time |"
-    else
-        report+="
-| 2 | Стратег утренний | **❌** | — |"
-    fi
+    load_status "strategist-morning"
+    report+="
+| 2 | Стратег утренний | $(task_report_table_status "$STATUS") | $(task_reference_display) |"
 
     # 3. Note-review (после 22:00)
     if (( 10#$HOUR >= 22 )); then
-        local nr_time
-        if nr_time=$(check_ran "strategist-note-review"); then
-            report+="
-| 3 | Разбор заметок | **✅** | $nr_time |"
-        else
-            report+="
-| 3 | Разбор заметок | **❌** | — |"
-        fi
+        load_status "strategist-note-review"
+        report+="
+| 3 | Разбор заметок | $(task_report_table_status "$STATUS") | $(task_reference_display) |"
     fi
 
     # 4. Week-review (Пн)
     if [ "$DOW" = "1" ]; then
-        local wr_time
-        if wr_time=$(check_ran_week "strategist-week-review"); then
-            report+="
-| 4 | Обзор недели | **✅** | $wr_time |"
-        else
-            report+="
-| 4 | Обзор недели | **❌** | — |"
-        fi
+        load_status "strategist-week-review"
+        report+="
+| 4 | Обзор недели | $(task_report_table_status "$STATUS") | $(task_reference_display) |"
     fi
 
     # 5. Экстрактор inbox-check
-    local ic_detail
-    if ic_detail=$(check_interval "extractor-inbox-check"); then
-        report+="
-| 5 | Проверка входящих | **✅** | $ic_detail |"
-    else
-        report+="
-| 5 | Проверка входящих | **❌** | — |"
-    fi
+    load_status "extractor-inbox-check"
+    report+="
+| 5 | Проверка входящих | $(task_report_table_status "$STATUS") | $(task_reference_display) |"
 
     report+="
 
