@@ -1,6 +1,6 @@
 #!/bin/bash
 # Knowledge Extractor Agent Runner
-# Запускает Claude Code с заданным процессом KE
+# Запускает AI CLI provider с заданным процессом KE
 
 set -euo pipefail
 
@@ -124,7 +124,7 @@ preflight_check() {
     local resolved_cli="$1"
 
     if [ ! -x "$resolved_cli" ]; then
-        log "ERROR: Claude CLI not executable: $resolved_cli"
+        log "ERROR: Claude-compatible CLI not executable: $resolved_cli"
         return 11
     fi
 
@@ -156,6 +156,13 @@ preflight_check() {
     fi
 
     return 0
+}
+
+claude_reauth_hint() {
+    local cli_name
+    cli_name=$(basename "${CLAUDE_PATH:-$DEFAULT_CLAUDE_PATH}")
+    [ -n "$cli_name" ] || cli_name="claude"
+    printf '%s\n' "$cli_name /login"
 }
 
 build_claude_args() {
@@ -275,12 +282,12 @@ $extra_args"
 
     local resolved_cli
     resolved_cli=$(resolve_claude_path) || {
-        log "ERROR: Claude CLI not found"
+        log "ERROR: Claude-compatible CLI not found"
         if has_codex_fallback; then
             run_codex_provider "$command_file" "$prompt" "claude_cli_missing"
             return $?
         fi
-        notify "🔴 Экзокортекс: Claude CLI не найден" "Extractor/$command_file не может стартовать: claude не найден"
+        notify "🔴 Экзокортекс: AI CLI path missing" "Extractor/$command_file не может стартовать: Claude-compatible CLI не найден"
         return 11
     }
 
@@ -290,7 +297,7 @@ $extra_args"
             run_codex_provider "$command_file" "$prompt" "claude_preflight_failed"
             return $?
         fi
-        notify "🔴 Экзокортекс: preflight failed" "Extractor/$command_file не стартовал: проверь helper/env/claude"
+        notify "🔴 Экзокортекс: preflight failed" "Extractor/$command_file не стартовал: проверь helper/env и Claude-compatible CLI path"
         return "$code"
     fi
 
@@ -309,7 +316,7 @@ $extra_args"
         log "WARN: Codex primary failed for $command_file — falling back to Claude provider"
     fi
 
-    log "Claude path: $resolved_cli"
+    log "Claude-compatible path: $resolved_cli"
 
     local -a model_candidates=()
     local candidate
@@ -347,13 +354,15 @@ $extra_args"
         cat "$tmp_out" >> "$LOG_FILE"
 
         if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set' "$tmp_out" 2>/dev/null; then
-            log "CRITICAL: Claude auth failed via helper/env/custom API"
+            log "CRITICAL: Claude-compatible provider auth failed via helper/env/custom API"
             if has_codex_fallback; then
                 rm -f "$tmp_out"
                 run_codex_provider "$command_file" "$prompt" "claude_auth_failed"
                 return $?
             fi
-            notify "🔴 Экзокортекс: auth failure" "Агент $command_file упал: проверь ~/.config/aist/env и helper"
+            local relogin_hint
+            relogin_hint=$(claude_reauth_hint)
+            notify "🔴 Экзокортекс: provider auth failure" "Агент $command_file упал: проверь ~/.config/aist/env, helper и $relogin_hint"
             notify_telegram "$command_file"
             rm -f "$tmp_out"
             return 17

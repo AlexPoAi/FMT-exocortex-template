@@ -1,6 +1,6 @@
 #!/bin/bash
 # Strategist (Стратег) Agent Runner
-# Запускает Claude Code с заданным сценарием
+# Запускает AI CLI provider с заданным сценарием
 
 set -e
 
@@ -19,7 +19,7 @@ WORKSPACE="$WORKSPACE_ROOT/DS-strategy"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/strategist"
 CLAUDE_PATH="${CLAUDE_PATH:-$HOME/.local/bin/claude}"
-CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude CLI
+CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude-compatible CLI
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
 AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
 AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
@@ -29,7 +29,7 @@ RUNTIME_ARBITER_PATH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scr
 GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
 [ -n "$GITHUB_USER" ] || GITHUB_USER="AlexPoAi"
 
-# Template placeholders may survive in repo mode; prefer a real local Claude path.
+# Template placeholders may survive in repo mode; prefer a real local Claude-compatible path.
 if [ ! -x "$CLAUDE_PATH" ]; then
     CLAUDE_PATH="$(command -v claude 2>/dev/null || true)"
 fi
@@ -45,7 +45,7 @@ if [ -n "$CODEX_PATH" ] && [ ! -x "$CODEX_PATH" ]; then
 fi
 
 if [ -z "$CLAUDE_PATH" ] && [ -z "$CODEX_PATH" ]; then
-    echo "ERROR: Neither Claude CLI nor Codex CLI is available." >&2
+    echo "ERROR: Neither Codex CLI nor Claude-compatible CLI is available." >&2
     exit 1
 fi
 
@@ -175,6 +175,12 @@ build_model_candidates() {
 is_model_unavailable_error() {
     local output_file="$1"
     grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error|API Error: 400 .*"code":"E005".*"Invalid request"|invalid_request_error' "$output_file" 2>/dev/null
+}
+
+claude_reauth_hint() {
+    local cli_name="${CLAUDE_PATH##*/}"
+    [ -n "$cli_name" ] || cli_name="claude"
+    printf '%s\n' "$cli_name /login"
 }
 
 run_codex_provider() {
@@ -330,14 +336,16 @@ ${prompt}"
         cat "$tmp_out" >> "$LOG_FILE"
 
         if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled' "$tmp_out" 2>/dev/null; then
-            log "CRITICAL: Claude auth failed for scenario: $command_file"
+            log "CRITICAL: Claude-compatible provider auth failed for scenario: $command_file"
             if has_codex_fallback; then
                 rm -f "$tmp_out"
                 run_codex_provider "$command_file" "$prompt" "claude_auth_failed"
                 return $?
             fi
-            notify "🔴 Экзокортекс: AUTH FAILURE" "Стратег/$command_file: токен истёк. Запусти: claude /login"
-            notify_telegram_text "auth-failure" "🔴 <b>Strategist auth failure</b>\n\nСценарий: <b>$command_file</b>\nДействие: выполнить <code>claude /login</code> и повторить запуск."
+            local relogin_hint
+            relogin_hint=$(claude_reauth_hint)
+            notify "🔴 Экзокортекс: provider auth failure" "Стратег/$command_file: Claude-compatible auth истёк. Запусти: $relogin_hint"
+            notify_telegram_text "auth-failure" "🔴 <b>Strategist provider auth failure</b>\n\nСценарий: <b>$command_file</b>\nProvider path: <code>${CLAUDE_PATH:-missing}</code>\nДействие: выполнить <code>$relogin_hint</code> и повторить запуск."
             rm -f "$tmp_out"
             return 1
         fi
@@ -366,12 +374,12 @@ ${prompt}"
 
         rm -f "$tmp_out"
         if [ "$rc" -eq 124 ]; then
-            log "ERROR: Claude CLI timed out after ${CLAUDE_TIMEOUT}s for scenario: $command_file (model=$attempt_model)"
+            log "ERROR: Claude-compatible provider timed out after ${CLAUDE_TIMEOUT}s for scenario: $command_file (model=$attempt_model)"
             log "Scenario result: $command_file status=timeout exit_code=$rc model=$attempt_model"
             return 124
         fi
 
-        log "ERROR: Claude CLI exited with code $rc for scenario: $command_file (model=$attempt_model)"
+        log "ERROR: Claude-compatible provider exited with code $rc for scenario: $command_file (model=$attempt_model)"
         log "Scenario result: $command_file status=failed exit_code=$rc model=$attempt_model"
         return "$rc"
     done
@@ -384,10 +392,10 @@ ${prompt}"
         git -C "$WORKSPACE" push >> "$LOG_FILE" 2>&1 && log "Pushed to GitHub" || log "WARN: git push failed"
     fi
 
-    # Очистить staging area после Claude сессии (предотвращает staging leak в следующие скрипты)
+    # Очистить staging area после AI CLI сессии (предотвращает staging leak в следующие скрипты)
     # НЕ трогаем working tree — только unstage orphaned changes
     git -C "$WORKSPACE" reset --quiet 2>/dev/null || true
-    log "Cleared staging area after Claude session"
+    log "Cleared staging area after AI CLI session"
 
     # macOS notification
     local summary
