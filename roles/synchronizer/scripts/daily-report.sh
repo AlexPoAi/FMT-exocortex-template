@@ -367,6 +367,28 @@ task_report_table_status() {
     esac
 }
 
+append_current_issue() {
+    local task="$1"
+    load_status "$task"
+
+    case "$STATUS" in
+        failed)
+            printf -- "- %s: %s\n" "$(task_display_name "$task")" "${SUMMARY:-ошибка}"
+            ;;
+        missing)
+            if ! task_missing_is_expected "$task"; then
+                printf -- "- %s: нет статуса в текущем окне\n" "$(task_display_name "$task")"
+            fi
+            ;;
+        stale)
+            printf -- "- %s: статус устарел для текущего окна\n" "$(task_display_name "$task")"
+            ;;
+        missed_window)
+            printf -- "- %s: сегодняшнее окно выполнения уже закрыто\n" "$(task_display_name "$task")"
+            ;;
+    esac
+}
+
 protocol_contract_status() {
     if [ -L "$CANONICAL_MEMORY_DIR" ] && [ ! -e "$CANONICAL_MEMORY_DIR" ]; then
         echo "broken"
@@ -857,12 +879,22 @@ agent: Синхронизатор
 
 "
 
-    # Ошибки
+    # Актуальные ошибки и предупреждения
     report+="## Ошибки и предупреждения
 "
     local warnings=""
-    if [ -f "$SCHEDULER_LOG" ]; then
-        warnings=$(grep -E "WARN:|ERROR:|failed" "$SCHEDULER_LOG" 2>/dev/null | sed 's/^/- /' || true)
+    local push_warning=""
+
+    for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
+        current_issue=$(append_current_issue "$task" || true)
+        if [ -n "$current_issue" ]; then
+            warnings+="$current_issue"
+        fi
+    done
+
+    if [ -f "$SCHEDULER_LOG" ] && grep -q "push failed" "$SCHEDULER_LOG" 2>/dev/null; then
+        push_warning="- push failed: один из git push не прошёл в течение дня\n"
+        warnings+="$push_warning"
     fi
 
     if [ -n "$warnings" ]; then
@@ -871,8 +903,12 @@ $warnings
 
 **Что делать:**
 "
-        if echo "$warnings" | grep -q "push failed" 2>/dev/null; then
+        if printf '%s' "$warnings" | grep -q "push failed" 2>/dev/null; then
             report+="- **push failed:** Mac был оффлайн. Запусти \`cd $HOME/Github/DS-strategy && git pull --rebase && git push\`
+"
+        fi
+        if printf '%s' "$warnings" | grep -q "сегодняшнее окно выполнения уже закрыто" 2>/dev/null; then
+            report+="- **strategist morning:** дождаться следующего утреннего окна; это historical miss, а не текущий runtime crash
 "
         fi
     else
