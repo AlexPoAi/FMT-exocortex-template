@@ -88,6 +88,14 @@ notify_telegram_text() {
     NOTIFY_TEXT="$text" "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist "$scenario" >> "$LOG_FILE" 2>&1 || true
 }
 
+fail_day_close_headless() {
+    local message="day-close requires an interactive protocol-close session and is no longer supported via headless strategist.sh. Use the canonical close route instead."
+    log "ERROR: $message"
+    log "Scenario result: day-close status=unsupported_path exit_code=19 route=protocol-close-interactive"
+    printf '%s\n' "$message" >&2
+    return 19
+}
+
 sanitize_model() {
     local model="$1"
     [ -n "$model" ] || return 1
@@ -433,9 +441,8 @@ case "$1" in
         notify_telegram "note-review"
         ;;
     "day-close")
-        log "Manual: running day close"
-        run_claude "day-close"
-        notify_telegram "day-close"
+        log "Manual: day-close requested via strategist"
+        fail_day_close_headless
         ;;
     "strategy-session")
         log "Manual: running strategy session (interactive)"
@@ -451,7 +458,7 @@ case "$1" in
         echo "  session-prep      - Manual session prep (headless preparation)"
         echo "  strategy-session  - Manual strategy session (interactive with user)"
         echo "  day-plan          - Manual day plan"
-        echo "  day-close         - Manual day close (update WeekPlan + MEMORY + backup)"
+        echo "  day-close         - Unsupported in headless strategist; use canonical protocol-close route"
         exit 1
         ;;
 esac
