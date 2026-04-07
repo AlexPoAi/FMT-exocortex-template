@@ -136,13 +136,13 @@ bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/extractor.sh archiv
 bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/chain-report.sh
 ```
 
-### Запуск из Claude Code (снимает блокировку вложенных сессий)
+### Запуск из AI CLI (снимает блокировку вложенных сессий)
 
 ```bash
-bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/claude-run.sh inbox-check
-bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/claude-run.sh session-watcher
-bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/claude-run.sh session-close
-bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/claude-run.sh archive-review
+bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/ai-run.sh inbox-check
+bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/ai-run.sh session-watcher
+bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/ai-run.sh session-close
+bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/ai-run.sh archive-review
 ```
 
 ### Утренний старт
@@ -193,7 +193,7 @@ DS-strategy/inbox/archive/
 cat ~/Github/DS-strategy/inbox/archive/index.md
 
 # Запустить переобработку архива
-bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/claude-run.sh archive-review
+bash ~/Github/FMT-exocortex-template/roles/extractor/scripts/ai-run.sh archive-review
 ```
 
 ---

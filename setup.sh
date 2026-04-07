@@ -3,7 +3,7 @@
 # Configures a forked FMT-exocortex-template: placeholders, memory, launchd, DS-strategy
 #
 # Usage:
-#   bash setup.sh          # Полная установка (git + GitHub CLI + Claude Code + автоматизация)
+#   bash setup.sh          # Полная установка (git + GitHub CLI + AI CLI + автоматизация)
 #   bash setup.sh --core   # Минимальная установка (только git, без сети)
 #
 set -e
@@ -38,7 +38,7 @@ for arg in "$@"; do
             echo "  --help      Эта справка"
             echo ""
             echo "Режимы:"
-            echo "  full (по умолчанию)  git + GitHub CLI + Claude Code + автоматизация Стратега"
+            echo "  full (по умолчанию)  git + GitHub CLI + AI CLI + автоматизация Стратега"
             echo "  --core               git + любой AI CLI. Без GitHub, без launchd"
             exit 0
             ;;
@@ -104,12 +104,13 @@ check_command "git" "Git" "xcode-select --install"
 if $CORE_ONLY; then
     echo ""
     echo "  Режим --core: проверяются только обязательные зависимости (git)."
-    echo "  GitHub CLI, Node.js, Claude Code — не требуются."
+    echo "  GitHub CLI, Node.js, AI CLI — не требуются."
 else
     check_command "gh" "GitHub CLI" "brew install gh"
     check_command "node" "Node.js" "brew install node (or https://nodejs.org)"
     check_command "npm" "npm" "Comes with Node.js"
-    check_command "claude" "Claude Code" "npm install -g @anthropic-ai/claude-code"
+    check_command "codex" "Codex CLI" "см. codex install / VS Code extension"
+    check_command "claude" "Claude Code (fallback)" "npm install -g @anthropic-ai/claude-code" "false"
 
     # Check gh auth
     if command -v gh >/dev/null 2>&1; then
@@ -148,8 +149,8 @@ if $CORE_ONLY; then
     TIMEZONE_HOUR="4"
     TIMEZONE_DESC="4:00 UTC"
 else
-    read -p "Claude CLI path [$(command -v claude || echo '/opt/homebrew/bin/claude')]: " CLAUDE_PATH
-    CLAUDE_PATH="${CLAUDE_PATH:-$(command -v claude || echo '/opt/homebrew/bin/claude')}"
+    read -p "Primary AI CLI path [$(command -v codex || command -v claude || echo '/usr/local/bin/codex')]: " CLAUDE_PATH
+    CLAUDE_PATH="${CLAUDE_PATH:-$(command -v codex || command -v claude || echo '/usr/local/bin/codex')}"
 
     read -p "Strategist launch hour (UTC, 0-23) [4]: " TIMEZONE_HOUR
     TIMEZONE_HOUR="${TIMEZONE_HOUR:-4}"
@@ -171,7 +172,7 @@ echo "  Workspace:      $WORKSPACE_DIR"
 if $CORE_ONLY; then
     echo "  Mode:           core (offline)"
 else
-    echo "  Claude path:    $CLAUDE_PATH"
+    echo "  AI CLI path:    $CLAUDE_PATH"
     echo "  Schedule hour:  $TIMEZONE_HOUR (UTC)"
     echo "  Time desc:      $TIMEZONE_DESC"
 fi
@@ -347,9 +348,9 @@ else
         echo "  1. Откройте https://claude.ai/settings/connectors"
         echo "  2. Добавьте: https://knowledge-mcp.aisystant.workers.dev/mcp"
         echo "  3. Добавьте: https://digital-twin-mcp.aisystant.workers.dev/mcp"
-        echo "  4. Перезапустите Claude Code"
+        echo "  4. Перезапустите ваш AI CLI"
         echo ""
-        echo "  После подключения проверьте командой /mcp в Claude Code."
+        echo "  После подключения проверьте, что коннекторы видны в вашем основном AI CLI."
     fi
 fi
 
