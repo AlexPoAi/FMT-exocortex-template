@@ -17,6 +17,14 @@
 | **Knowledge Audit** | «Аудит Pack» / ежемесячно | Интерактивный |
 | **Inbox-Check** | launchd каждые 3ч (опционально) | Headless (отчёт) |
 
+## Acceptance
+
+- [ACCEPTANCE.md](/Users/alexander/Github/FMT-exocortex-template/roles/extractor/ACCEPTANCE.md) — truthful runbook для сценариев `pass / partial / broken`
+
+Короткая семантика:
+- `inbox-check`, `on-demand`, `session-close` — confirmed operational scope
+- `lost-input recovery` — пока target capability, не verified-by-default
+
 ## Когда подключать
 
 - Создал первый Pack (PACK-{твоя-область})
