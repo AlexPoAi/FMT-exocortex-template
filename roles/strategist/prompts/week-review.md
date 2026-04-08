@@ -73,7 +73,7 @@ git -C {{WORKSPACE_DIR}}/<repo> log --since="last monday 00:00" --until="today 0
 
 1. Переключись на **роль Автора (R4)** и на основе секции «Итоги W{N}» в WeekPlan сформируй пост для клуба.
 
-   **Обязательно прочитай** `{{WORKSPACE_DIR}}/DS-Knowledge-Index/CLAUDE.md` — полные инструкции роли Автора:
+   **Обязательно прочитай** `{{KNOWLEDGE_INDEX_DIR}}/CLAUDE.md` — полные инструкции роли Автора:
    - § 2 — стандарт названий для итогов недели
    - § 3 — формат поста: аудитория `community`, структура для тега `итоги-недели` (4 уровня влияния, голос от первого лица, 400-700 слов)
 
@@ -89,7 +89,7 @@ git -C {{WORKSPACE_DIR}}/<repo> log --since="last monday 00:00" --until="today 0
 
    Выбери лучшее название сам (в автоматическом режиме нет пользователя для выбора).
 
-2. Создай файл `{{WORKSPACE_DIR}}/DS-Knowledge-Index/docs/{YYYY}/{YYYY-MM-DD}-week-review-w{N}.md`
+2. Создай файл `{{KNOWLEDGE_INDEX_DIR}}/docs/{YYYY}/{YYYY-MM-DD}-week-review-w{N}.md`
 
 3. Frontmatter:
 
@@ -107,8 +107,8 @@ content_plan: null
 ---
 ```
 
-4. Обнови `{{WORKSPACE_DIR}}/DS-Knowledge-Index/docs/README.md` — добавь строку в начало текущего месяца
-5. Закоммить и запушь `DS-Knowledge-Index` (git add docs/ && git commit && git push)
+4. Обнови `{{KNOWLEDGE_INDEX_DIR}}/docs/README.md` — добавь строку в начало текущего месяца
+5. Закоммить и запушь `{{KNOWLEDGE_INDEX_REPO}}` (git add docs/ && git commit && git push)
 
 **Шаблон секции «Итоги W{N}» в WeekPlan:**
 
@@ -156,7 +156,7 @@ content_plan: null
 3. Добавь строку:
 
 ```markdown
-**Пост итогов W{N-1}:** [название](https://github.com/{{GITHUB_USER}}/DS-Knowledge-Index/blob/main/docs/{YYYY}/{YYYY-MM-DD}-week-review-w{N-1}.md) — status: ready → авто-публикация Пн 07:14
+**Пост итогов W{N-1}:** [название](https://github.com/{{GITHUB_USER}}/{{KNOWLEDGE_INDEX_REPO}}/blob/main/docs/{YYYY}/{YYYY-MM-DD}-week-review-w{N-1}.md) — status: ready → авто-публикация Пн 07:14
 ```
 
 4. Закоммить вместе с остальными изменениями
@@ -165,7 +165,7 @@ content_plan: null
 
 Результат:
 - Секция «Итоги W{N}» в WeekPlan — как вход для session-prep
-- Пост итогов в `DS-Knowledge-Index/docs/{YYYY}/` со `status: ready` — авто-публикация Пн 07:14
+- Пост итогов в `{{KNOWLEDGE_INDEX_DIR}}/docs/{YYYY}/` со `status: ready` — авто-публикация Пн 07:14
 - Ссылка на пост в WeekPlan — для отслеживания
 
 ### 8. Week Close: обслуживание MEMORY.md

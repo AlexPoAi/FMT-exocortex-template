@@ -269,10 +269,33 @@ resolve_command_path() {
     esac
 }
 
+resolve_knowledge_index_dir() {
+    local candidate
+
+    for candidate in \
+        "$WORKSPACE_ROOT/DS-Knowledge-Index" \
+        "$WORKSPACE_ROOT/DS-Knowledge-Index-Tseren" \
+        "$HOME/IWE/DS-Knowledge-Index" \
+        "$HOME/IWE/DS-Knowledge-Index-Tseren"
+    do
+        if [ -d "$candidate/.git" ] || [ -d "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 run_claude() {
     local command_file="$1"
     local command_path
+    local knowledge_index_dir
+    local knowledge_index_repo
     command_path=$(resolve_command_path "$command_file")
+    knowledge_index_dir=$(resolve_knowledge_index_dir || true)
+    [ -n "$knowledge_index_dir" ] || knowledge_index_dir="$WORKSPACE_ROOT/DS-Knowledge-Index-Tseren"
+    knowledge_index_repo="$(basename "$knowledge_index_dir")"
 
     if [ ! -f "$command_path" ]; then
         log "ERROR: Command file not found: $command_path"
@@ -281,15 +304,17 @@ run_claude() {
 
     # Читаем содержимое команды
     local prompt
-    prompt=$(python3 - "$command_path" "$WORKSPACE_ROOT" "$HOME" "$GITHUB_USER" <<'PY'
+    prompt=$(python3 - "$command_path" "$WORKSPACE_ROOT" "$HOME" "$GITHUB_USER" "$knowledge_index_dir" "$knowledge_index_repo" <<'PY'
 import sys
 from pathlib import Path
 
-path, workspace_dir, home_dir, github_user = sys.argv[1:5]
+path, workspace_dir, home_dir, github_user, knowledge_index_dir, knowledge_index_repo = sys.argv[1:7]
 text = Path(path).read_text(encoding="utf-8")
 text = text.replace("{{WORKSPACE_DIR}}", workspace_dir)
 text = text.replace("{{HOME_DIR}}", home_dir)
 text = text.replace("{{GITHUB_USER}}", github_user)
+text = text.replace("{{KNOWLEDGE_INDEX_DIR}}", knowledge_index_dir)
+text = text.replace("{{KNOWLEDGE_INDEX_REPO}}", knowledge_index_repo)
 print(text)
 PY
 )
@@ -543,11 +568,15 @@ case "$1" in
             log "SKIP: week-review already completed today"
             exit 0
         fi
-        log "Sunday: running week review"
+        if [ "$DAY_OF_WEEK" -eq 1 ]; then
+            log "Monday weekly window: running week review"
+        else
+            log "Manual/unscheduled: running week review"
+        fi
         run_claude "week-review"
         # Fallback push for Knowledge Index (week-review creates a post there)
-        KI_REPO="$HOME/IWE/DS-Knowledge-Index"
-        if git -C "$KI_REPO" log --oneline -1 --since="1 hour ago" --grep="week-review" 2>/dev/null | grep -q .; then
+        KI_REPO="$(resolve_knowledge_index_dir || true)"
+        if [ -n "$KI_REPO" ] && git -C "$KI_REPO" log --oneline -1 --since="1 hour ago" --grep="week-review" 2>/dev/null | grep -q .; then
             git -C "$KI_REPO" push >> "$LOG_FILE" 2>&1 && log "Pushed Knowledge Index (fallback)" || log "WARN: KI push failed"
         fi
         notify_telegram "week-review"
@@ -632,7 +661,7 @@ case "$1" in
         echo "Scenarios:"
         echo "  morning           - 4:00 EET daily (session-prep on Mon, day-plan others)"
         echo "  note-review       - 23:00 EET daily (review fleeting notes + clean inbox)"
-        echo "  week-review       - Sunday 19:00 EET review for club"
+        echo "  week-review       - Monday 00:00 local weekly review for club"
         echo "  session-prep      - Manual session prep (headless preparation)"
         echo "  strategy-session  - Manual strategy session (interactive with user)"
         echo "  day-plan          - Manual day plan"

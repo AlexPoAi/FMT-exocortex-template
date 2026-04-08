@@ -3,7 +3,7 @@
 > **Модуль шаблона:** `roles/strategist/` в [FMT-exocortex-template](../../README.md)
 > **Роль:** R1 Стратег — планирование и отслеживание (DP.D.033 §7, DP.ROLE.001)
 
-Роль Стратег автоматизирует операционное планирование: утренние планы, вечерние итоги, недельные обзоры. Текущий исполнитель: Claude (A1, Grade 3-4).
+Роль Стратег автоматизирует операционное планирование: утренние планы, вечерние итоги, недельные обзоры. Текущий исполнитель: Codex-primary / Claude-fallback.
 
 ---
 
@@ -50,7 +50,7 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 | 1b | Сессия стратегирования | DS: `strategy-session.md` | Вручную (интерактив) | Создаётся пользователем |
 | 2 | План на день | `memory/protocol-open.md` | Вт-Вс утро + вручную | В шаблоне |
 | 3 | Вечерний итог | `prompts/evening.md` | Вручную | В шаблоне |
-| 4 | Итоги недели | DS: `week-review.md` | Вс ночь | Создаётся пользователем |
+| 4 | Итоги недели | DS: `week-review.md` | Пн 00:00 | Создаётся пользователем |
 | 5 | Добавить РП | `prompts/add-wp.md` | Вручную | В шаблоне |
 | 6 | Проверить задачу (WP Gate) | `prompts/check-plan.md` | WP Gate | В шаблоне |
 | 7 | Закрытие дня | `memory/protocol-close.md` | Вручную | В шаблоне |
@@ -58,14 +58,15 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 
 ---
 
-## Расписание (launchd, macOS)
+## Расписание (scheduler / macOS)
 
 | Время (UTC) | День | Сценарий | Plist |
 |-------------|------|----------|-------|
 | {{TIMEZONE_HOUR}}:00 | Понедельник | `session-prep` (headless) | `com.strategist.morning` |
 | {{TIMEZONE_HOUR}}:00 | Вт-Вс | `day-plan` | `com.strategist.morning` |
-| 00:00 | Понедельник | `week-review` | `com.strategist.weekreview` |
+| 00:00 | Понедельник | `week-review` | `com.exocortex.scheduler` |
 
+> Source-of-truth для автозапуска: `com.exocortex.scheduler`. Legacy `com.strategist.*` jobs выведены из эксплуатации.
 > На Linux: настройте cron вручную (`crontab -e`). Без автоматизации Стратег запускается вручную.
 
 ## Установка
