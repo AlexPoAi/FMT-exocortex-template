@@ -72,7 +72,8 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 ## Установка
 
 ```bash
-./install.sh          # Установить launchd агенты
+./install.sh          # Удалить legacy strategist launchd jobs и оставить ручной entrypoint
+bash ../synchronizer/install.sh  # Канонически установить scheduler, который запускает Strategist
 
 # Ручной запуск
 ./scripts/strategist.sh morning           # session-prep (Пн) или day-plan (Вт-Вс)
@@ -82,3 +83,5 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 ./scripts/strategist.sh day-close         # закрытие дня
 ./scripts/strategist.sh note-review       # обзор заметок
 ```
+
+> `roles/strategist/install.sh` больше не включает `com.strategist.morning` / `com.strategist.weekreview`. Scheduled source-of-truth живёт в `roles/synchronizer/install.sh` через `com.exocortex.scheduler`.

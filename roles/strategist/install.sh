@@ -1,27 +1,32 @@
 #!/bin/bash
-# Install Strategist Agent launchd jobs
+# Install Strategist entrypoints without re-enabling legacy launchd jobs
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LAUNCHD_DIR="$SCRIPT_DIR/scripts/launchd"
 TARGET_DIR="$HOME/Library/LaunchAgents"
+SYNC_INSTALL="$HOME/Github/FMT-exocortex-template/roles/synchronizer/install.sh"
 
-echo "Installing Strategist Agent launchd jobs..."
+echo "Installing Strategist runtime compatibility layer..."
 
-# Unload old agents if present
+# Unload legacy strategist jobs if present
 launchctl unload "$TARGET_DIR/com.strategist.morning.plist" 2>/dev/null || true
 launchctl unload "$TARGET_DIR/com.strategist.weekreview.plist" 2>/dev/null || true
 
-# Copy new plist files
-cp "$LAUNCHD_DIR/com.strategist.morning.plist" "$TARGET_DIR/"
-cp "$LAUNCHD_DIR/com.strategist.weekreview.plist" "$TARGET_DIR/"
+# Remove copied legacy plists if they are still present in LaunchAgents
+rm -f "$TARGET_DIR/com.strategist.morning.plist" "$TARGET_DIR/com.strategist.weekreview.plist"
 
-# Make script executable
+# Keep manual entrypoint executable
 chmod +x "$SCRIPT_DIR/scripts/strategist.sh"
 
-# Load agents
-launchctl load "$TARGET_DIR/com.strategist.morning.plist"
-launchctl load "$TARGET_DIR/com.strategist.weekreview.plist"
+echo "Legacy com.strategist.* launchd jobs removed."
+echo "Source-of-truth for scheduled Strategist runs is com.exocortex.scheduler."
 
-echo "Done. Agents loaded:"
-launchctl list | grep strategist
+if [ -x "$SYNC_INSTALL" ]; then
+    echo "To (re)install the scheduled runtime, run:"
+    echo "  bash $SYNC_INSTALL"
+else
+    echo "Synchronizer installer not found at: $SYNC_INSTALL"
+fi
+
+echo "Current loaded jobs:"
+launchctl list | grep -E 'exocortex|strategist' || true
