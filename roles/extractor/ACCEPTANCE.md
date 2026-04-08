@@ -23,6 +23,7 @@
 - полноценный end-to-end recovery потерянных входов из нескольких репозиториев и артефактов;
 - автоматический возврат recovered elements обратно в устойчивый active WP pipeline;
 - надёжная дедупликация recovery-каталога без ручного участия.
+- надёжный routing governance/growth/personal inputs в `INBOX` или recovery-catalog без потери в reject/archive.
 
 ## Verification scenarios
 
@@ -101,6 +102,24 @@
 - capability заявлена, но end-to-end сценарий не выполнен.
 
 > До живой проверки этот сценарий считать `target capability`, а не подтверждённой operational функцией.
+
+### 5. Governance-To-Backlog Routing
+
+**Что проверяем:**
+- не-domain inputs не теряются между extraction-report, rejected archive и `INBOX`;
+- governance/growth/personal inputs получают осмысленный outcome.
+
+**Pass:**
+- элемент не уходит в пустой `reject`;
+- создан backlog-task или recovery-item;
+- source trace сохранён.
+
+**Partial:**
+- routing определён правильно, но ещё требует ручного создания backlog/recovery артефакта.
+
+**Broken:**
+- элемент распознан как не-Pack, но фактически потерян;
+- rejected archive используется как конечная свалка вместо осмысленного DS/backlog route.
 
 ## Truthful verdict rules
 

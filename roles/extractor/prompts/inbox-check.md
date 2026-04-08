@@ -2,7 +2,7 @@
 
 > Source-of-truth: DP.AISYS.013 (PACK-digital-platform). Алгоритм полностью описан ниже.
 > Этот промпт выполняется headless (launchd, каждые 3 часа) или вручную.
-> Режим: **без одобрения** — только генерация отчёта. Применение — в интерактивной сессии.
+> Режим: **без одобрения** — headless routing и генерация отчёта. Финальная запись в Pack — только в интерактивной сессии.
 
 ## Роль
 
@@ -53,6 +53,15 @@
 2. Определи директорию по типу
 3. Прочитай `00-pack-manifest.md` ТОЛЬКО целевого Pack'а → проверь bounded context
 
+Если элемент **не является Pack-knowledge**, НЕ отправляй его автоматически в пустой `reject`.
+
+Вместо этого сначала определи outcome:
+- `pack_candidate` — доменное знание, которое должно попасть в Pack
+- `backlog_task` — governance / growth / strategy / implementation task, которая должна попасть в `DS-strategy/inbox/INBOX-TASKS.md`
+- `recovery_item` — элемент, который пока некуда класть напрямую, но его нельзя терять; он должен попасть в `DS-strategy/inbox/RECOVERY-CATALOG-LOST-INPUTS-YYYY-MM-DD.md`
+- `rejected` — шум, тест, пустое сообщение, дубликат без новой ценности
+- `deferred` — нужен ручной выбор маршрута, но элемент не потерян
+
 **2c. Формализация (lazy reading):**
 
 1. Прочитай целевую директорию ТОЛЬКО нужного Pack'а → найди существующие файлы → назначь ID
@@ -65,7 +74,7 @@
 - [ ] Правильная директория?
 - [ ] Нет дубликата?
 - [ ] Соответствует bounded context?
-- [ ] Не governance-контент?
+- [ ] Если это governance/growth/personal input — выбран backlog/recovery route, а не пустой reject
 - [ ] Не похож на паттерн из feedback-log.md?
 
 ### Шаг 3: Сгенерировать Extraction Report
@@ -101,10 +110,12 @@ remaining: M
 **Сырой текст:** «{цитата из capture}»
 **Классификация:** {тип}
 
-**Куда записать:**
-- **Репо:** {путь к Pack}
+**Outcome:** pack_candidate / backlog_task / recovery_item / rejected / deferred
+
+**Куда направить:**
+- **Репо/контур:** {Pack / DS-strategy / recovery-catalog / archive}
 - **Файл:** {путь к файлу}
-- **Действие:** создать файл / добавить секцию / добавить строки
+- **Действие:** создать файл / добавить секцию / создать backlog task / добавить в recovery-catalog / архивировать
 
 **Совместимость:**
 - **Результат:** {совместим / уточняет / противоречит / дубликат}
@@ -116,7 +127,7 @@ remaining: M
 {ПОЛНЫЙ текст файла с frontmatter}
 ~~~
 
-**Вердикт:** accept / reject / defer
+**Вердикт:** pack_candidate / backlog_task / recovery_item / rejected / deferred
 **Обоснование:** {почему}
 
 ---
@@ -127,15 +138,21 @@ remaining: M
 |---------|----------|
 | Captures обработано | N |
 | Всего кандидатов | N |
-| Accept | N |
-| Reject | N |
-| Defer | N |
+| Pack candidate | N |
+| Backlog task | N |
+| Recovery item | N |
+| Rejected | N |
+| Deferred | N |
 | Осталось в inbox | M |
 ```
 
-### Шаг 3b: Создать задачи в INBOX-TASKS для каждого accept-кандидата
+### Шаг 3b: Создать управляемые артефакты по outcome
 
-После генерации отчёта — для каждого кандидата с вердиктом `accept` добавь задачу в `{{WORKSPACE_DIR}}/DS-strategy/inbox/INBOX-TASKS.md`.
+После генерации отчёта — не оставляй element без route.
+
+#### A. Для каждого `pack_candidate`
+
+Добавь задачу в `{{WORKSPACE_DIR}}/DS-strategy/inbox/INBOX-TASKS.md`.
 
 **Где добавить:** в начало файла, сразу после frontmatter (перед первой задачей).
 
@@ -152,9 +169,38 @@ remaining: M
 ```
 
 **Важно:**
-- Добавляй ТОЛЬКО для `accept`. Reject и defer — пропускать.
+- Добавляй ТОЛЬКО для `pack_candidate`.
 - Не дублируй: если задача с таким репо+файлом уже есть в INBOX-TASKS → пропусти.
 - Тег `[KE]` в названии — маркер задач Knowledge Extractor.
+
+#### B. Для каждого `backlog_task`
+
+Добавь обычную backlog-задачу в `{{WORKSPACE_DIR}}/DS-strategy/inbox/INBOX-TASKS.md`.
+
+**Формат задачи:**
+
+```markdown
+- [pending] {YYYY-MM-DD}: {краткий заголовок backlog-задачи}
+  - Контекст: extracted from inbox-check {YYYY-MM-DD}, кандидат #{N}
+  - Источник: {capture title}
+  - Outcome: backlog_task
+  - Почему не Pack: {краткое обоснование}
+  - Следующий шаг: {что именно нужно сделать дальше}
+  - Приоритет: medium
+  - Бюджет: 30-60 мин
+```
+
+#### C. Для каждого `recovery_item`
+
+Добавь запись в `{{WORKSPACE_DIR}}/DS-strategy/inbox/RECOVERY-CATALOG-LOST-INPUTS-{YYYY-MM-DD}.md`.
+
+Если каталога за дату ещё нет — создай его.
+
+Минимальные поля записи:
+- элемент
+- источник
+- статус recovery
+- что нужно для возврата в контур
 
 ### Шаг 4: Пометить captures как проанализированные
 
@@ -167,7 +213,7 @@ remaining: M
 
 ### Шаг 4b: Rejected captures → Archive
 
-Для каждого capture с вердиктом `reject`:
+Для каждого capture с вердиктом `rejected`:
 1. Создай файл в `{{WORKSPACE_DIR}}/DS-strategy/inbox/archive/rejected/` с именем `CO.reject.{NNN}-{slug}.md`
 2. Frontmatter: `id`, `type: capture`, `status: rejected`, `reason`, `date`, `source`, `tags`
 3. Добавь запись в `{{WORKSPACE_DIR}}/DS-strategy/inbox/archive/index.md` (новая строка в таблице Реестр)
@@ -178,14 +224,14 @@ remaining: M
 2. Закоммить captures.md (метки analyzed)
 3. Запушить DS-strategy
 
-**Сообщение коммита:** `inbox-check: N captures → extraction report {date}`
+**Сообщение коммита:** `inbox-check: N captures → routed outcomes {date}`
 
 ## Что НЕ делать
 
 - **НЕ записывай в Pack** — только генерируй отчёт. Запись = только в интерактивной сессии после одобрения
 - **НЕ ставь `[processed]`** — только `[analyzed]`. `[processed]` = записано в Pack (ставит session-close)
 - Не создавай файлы без frontmatter
-- Не экстрагируй governance-контент
+- Не отправляй governance/growth/personal-strategy inputs в пустой `reject`, если для них есть осмысленный DS/backlog маршрут
 - Не предлагай кандидаты, похожие на паттерны из feedback-log.md
 
 ## Применение отчёта (отдельная сессия)
@@ -194,7 +240,9 @@ remaining: M
 
 1. Прочитай последний отчёт из `DS-strategy/inbox/extraction-reports/`
 2. Покажи каждый кандидат пользователю
-3. Для accept — создай файл, закоммить в целевой Pack
-4. Для reject — записать причину в feedback-log.md
-5. Для defer — оставь в отчёте для следующего цикла
-6. Обнови статус отчёта: `status: applied`
+3. Для `pack_candidate` — создай файл, закоммить в целевой Pack
+4. Для `backlog_task` — убедись, что задача корректно оформлена в `INBOX`
+5. Для `recovery_item` — либо верни в backlog, либо сохрани как recovery до следующего цикла
+6. Для `rejected` — записать причину в feedback-log.md
+7. Для `deferred` — оставить в отчёте для следующего цикла
+8. Обнови статус отчёта: `status: applied`
