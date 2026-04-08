@@ -653,6 +653,7 @@ case "$1" in
         acquire_lock "$SCENARIO"
         if already_ran_today "$SCENARIO"; then
             log "SKIP: $SCENARIO already completed today"
+            write_status_artifact "$(status_task_for_scenario "$SCENARIO")" "success" "0" "already completed earlier today" "verified" "same-day completion detected before rerun" "" "true"
             exit 0
         fi
 
@@ -675,6 +676,7 @@ case "$1" in
         acquire_lock "week-review"
         if already_ran_today "week-review"; then
             log "SKIP: week-review already completed today"
+            write_status_artifact "$(status_task_for_scenario "week-review")" "success" "0" "already completed earlier this week-window" "verified" "same-week completion detected before rerun" "" "true"
             exit 0
         fi
         if [ "$DAY_OF_WEEK" -eq 1 ]; then
