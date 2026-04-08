@@ -550,6 +550,21 @@ ${prompt}"
 # Проверка: уже запускался ли сценарий сегодня
 already_ran_today() {
     local scenario="$1"
+    local status_file task status end_ts
+
+    task="$(status_task_for_scenario "$scenario")"
+    status_file="$STATUS_DIR/${task}.status"
+
+    if [ -n "$task" ] && [ -f "$status_file" ]; then
+        # shellcheck disable=SC1090
+        source "$status_file"
+        status="${STATUS:-}"
+        end_ts="${END_TS:-}"
+        if [ "$status" = "success" ] && [ -n "$end_ts" ] && [ "${end_ts%% *}" = "$DATE" ]; then
+            return 0
+        fi
+    fi
+
     [ -f "$LOG_FILE" ] && grep -q "Completed scenario: $scenario" "$LOG_FILE"
 }
 
