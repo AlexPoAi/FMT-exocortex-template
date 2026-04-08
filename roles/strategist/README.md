@@ -62,8 +62,8 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 
 | Время (UTC) | День | Сценарий | Plist |
 |-------------|------|----------|-------|
-| {{TIMEZONE_HOUR}}:00 | Понедельник | `session-prep` (headless) | `com.strategist.morning` |
-| {{TIMEZONE_HOUR}}:00 | Вт-Вс | `day-plan` | `com.strategist.morning` |
+| {{TIMEZONE_HOUR}}:00 | Понедельник | `session-prep` (headless) | `com.exocortex.scheduler` |
+| {{TIMEZONE_HOUR}}:00 | Вт-Вс | `day-plan` | `com.exocortex.scheduler` |
 | 00:00 | Понедельник | `week-review` | `com.exocortex.scheduler` |
 
 > Source-of-truth для автозапуска: `com.exocortex.scheduler`. Legacy `com.strategist.*` jobs выведены из эксплуатации.
