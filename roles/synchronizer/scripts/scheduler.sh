@@ -154,10 +154,16 @@ dispatch() {
     # --- Стратег: week-review (Пн, до morning) ---
     if [ "$DOW" = "1" ] && ! ran_this_week "strategist-week-review"; then
         log "→ strategist week-review (catch-up: hour=$HOUR)"
-        if "$STRATEGIST_SH" week-review >> "$LOG_FILE" 2>&1; then
+        set +e
+        "$STRATEGIST_SH" week-review >> "$LOG_FILE" 2>&1
+        _rc=$?
+        set -e
+        if [ "$_rc" -eq 0 ]; then
             mark_done_week "strategist-week-review"
+        elif [ "$_rc" -eq 2 ]; then
+            log "INFO: strategist week-review — уже выполняется (lock), ждём завершения"
         else
-            log "WARN: strategist week-review failed (will retry next dispatch)"
+            log "WARN: strategist week-review failed (exit $_rc, will retry next dispatch)"
         fi
         ran=1
     fi
@@ -183,10 +189,16 @@ dispatch() {
     # --- Стратег: note-review (22:00+) ---
     if (( 10#$HOUR >= 22 )) && ! ran_today "strategist-note-review"; then
         log "→ strategist note-review (catch-up: hour=$HOUR)"
-        if "$STRATEGIST_SH" note-review >> "$LOG_FILE" 2>&1; then
+        set +e
+        "$STRATEGIST_SH" note-review >> "$LOG_FILE" 2>&1
+        _rc=$?
+        set -e
+        if [ "$_rc" -eq 0 ]; then
             mark_done "strategist-note-review"
+        elif [ "$_rc" -eq 2 ]; then
+            log "INFO: strategist note-review — уже выполняется (lock), ждём завершения"
         else
-            log "WARN: strategist note-review failed (will retry next dispatch)"
+            log "WARN: strategist note-review failed (exit $_rc, will retry next dispatch)"
         fi
         ran=1
     elif (( 10#$HOUR < 12 )); then
