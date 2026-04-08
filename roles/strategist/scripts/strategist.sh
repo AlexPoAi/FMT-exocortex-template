@@ -607,6 +607,7 @@ acquire_lock() {
 resolve_rhythm_config() {
     local candidates=(
         "$WORKSPACE_ROOT/memory/day-rhythm-config.yaml"
+        "$WORKSPACE_ROOT/FMT-exocortex-template/memory/day-rhythm-config.yaml"
         "$HOME/.claude/projects/-Users-$(whoami)-Github/memory/day-rhythm-config.yaml"
         "$HOME/.claude/projects/-Users-$(whoami)-Github-DS-strategy/memory/day-rhythm-config.yaml"
         "$HOME/.claude/projects/-Users-$(whoami)-IWE/memory/day-rhythm-config.yaml"
