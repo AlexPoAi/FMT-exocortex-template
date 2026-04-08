@@ -12,7 +12,7 @@
 
 Пользователь всегда одобряет перед финальной записью в Pack.
 
-> Truthful note: routing и extraction-report контур подтверждены практикой. Но full-loop модель `input -> classification -> target route -> artifact -> tracked status` ещё не доведена до конца: governance/growth/personal inputs пока не гарантированно возвращаются в backlog/recovery автоматически.
+> Truthful note: routing и extraction-report контур подтверждены практикой. Но full-loop модель `input -> classification -> target route -> artifact -> tracked status` ещё не доведена до конца: governance/growth/personal inputs уже не должны тихо теряться на уровне `inbox-check`, но полный end-to-end return loop через `Strategist` и weekly/backlog orchestration ещё не доказан живым сценарием.
 
 ## Сценарии
 
@@ -82,13 +82,18 @@ Knowledge Extraction Pipeline:
      ├─ implementation knowledge → DS docs/ по системе (routing.md §5)
      ├─ governance / growth / personal strategy → backlog task / recovery item
      └─ noise / test / duplicate → reject
-  4. Создать управляемый артефакт:
+ 4. Создать управляемый артефакт:
      ├─ Pack → candidate card / SPF text
      ├─ DS → docs candidate
      └─ backlog/recovery → запись в `INBOX` или recovery-catalog
-  5. Проверить: нет ли дубликатов и противоречий
-  6. Показать Extraction Report пользователю
-  7. Записать только одобренное или правильно routed
+  5. Выполнить post-check:
+     ├─ report существует
+     ├─ `pack_candidate/backlog_task` дали след в `INBOX`
+     ├─ `recovery_item` дал recovery-catalog
+     └─ `rejected` дал archive entry
+  6. Проверить: нет ли дубликатов и противоречий
+  7. Показать Extraction Report пользователю
+  8. Записать только одобренное или правильно routed
 ```
 
 ## Файлы
@@ -112,6 +117,7 @@ Knowledge Extraction Pipeline:
 4. **Lazy reading:** Inbox-check читает только целевой Pack, не все сразу
 5. **Truthful scope:** Если recovery-сценарий не доведён до end-to-end, Экстрактор должен выдавать отчёт и кандидаты, а не делать вид, что контур уже полностью восстановлен
 6. **Не терять governance-inputs:** growth, strategy, personal-owner tasks и backlog items не должны уходить в `reject`, если для них существует осмысленный DS/backlog маршрут
+7. **Report не считается успехом сам по себе:** `inbox-check` должен оставлять проверяемый след в `INBOX`, recovery-catalog или archive, иначе сценарий считается broken
 
 ---
 

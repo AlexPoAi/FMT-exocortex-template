@@ -17,6 +17,8 @@ fi
 WORKSPACE="$WORKSPACE_ROOT"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/extractor"
+STATE_DIR="$HOME/.local/state/exocortex"
+LOCK_DIR="$STATE_DIR/locks"
 ENV_FILE="$HOME/.config/aist/env"
 DEFAULT_CLAUDE_PATH="${CLAUDE_PATH:-$(command -v claude 2>/dev/null || echo /usr/local/bin/claude)}"
 
@@ -27,10 +29,12 @@ AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
 AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
+CODEX_TIMEOUT="${CODEX_TIMEOUT:-1200}"
 AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
 RUNTIME_ARBITER_PATH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
 
 mkdir -p "$LOG_DIR"
+mkdir -p "$LOCK_DIR"
 
 DATE=$(date +%Y-%m-%d)
 HOUR=$(date +%H)
@@ -40,6 +44,56 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
+
+acquire_lock() {
+    local lock_name="$1"
+    local lock_path="$LOCK_DIR/$lock_name.lock"
+
+    if mkdir "$lock_path" 2>/dev/null; then
+        printf '%s\n' "$$" > "$lock_path/pid"
+        trap 'rm -rf "$lock_path"' EXIT
+        return 0
+    fi
+
+    local existing_pid=""
+    if [ -f "$lock_path/pid" ]; then
+        existing_pid=$(cat "$lock_path/pid" 2>/dev/null || true)
+    fi
+
+    if [ -n "$existing_pid" ] && ! kill -0 "$existing_pid" 2>/dev/null; then
+        rm -rf "$lock_path"
+        if mkdir "$lock_path" 2>/dev/null; then
+            printf '%s\n' "$$" > "$lock_path/pid"
+            trap 'rm -rf "$lock_path"' EXIT
+            log "WARN: removed stale extractor lock $lock_name (pid=$existing_pid)"
+            return 0
+        fi
+    fi
+
+    log "SKIP: $lock_name already running${existing_pid:+ (pid=$existing_pid)}"
+    return 1
+}
+
+# macOS не имеет GNU timeout — используем perl fallback
+if ! command -v timeout >/dev/null 2>&1; then
+    timeout() {
+        local duration="$1"; shift
+        perl -e '
+            use POSIX ":sys_wait_h";
+            my $timeout = shift @ARGV;
+            my $pid = fork();
+            if ($pid == 0) { exec @ARGV; die "exec failed: $!"; }
+            eval {
+                local $SIG{ALRM} = sub { kill "TERM", $pid; die "timeout\n"; };
+                alarm $timeout;
+                waitpid($pid, 0);
+                alarm 0;
+            };
+            if ($@ && $@ eq "timeout\n") { waitpid($pid, WNOHANG); exit 124; }
+            exit ($? >> 8);
+        ' "$duration" "$@"
+    }
+fi
 
 notify() {
     local title="$1"
@@ -238,7 +292,7 @@ run_codex_provider() {
     tmp_msg=$(mktemp)
 
     log "WARN: falling back to Codex for $command_file (reason=$reason, model=$CODEX_MODEL)"
-    "$resolved_codex" exec \
+    timeout "$CODEX_TIMEOUT" "$resolved_codex" exec \
         --skip-git-repo-check \
         -C "$WORKSPACE" \
         --output-last-message "$tmp_msg" \
@@ -260,6 +314,12 @@ run_codex_provider() {
         log "Completed process: $command_file"
         log "Process result: $command_file status=success exit_code=0 provider=codex model=$CODEX_MODEL"
         return 0
+    fi
+
+    if [ "$rc" -eq 124 ]; then
+        log "ERROR: Codex provider timed out after ${CODEX_TIMEOUT}s for $command_file"
+        notify "⚠️ Экзокортекс: timeout Codex" "extractor/$command_file превысил лимит ${CODEX_TIMEOUT}s"
+        return 124
     fi
 
     log "ERROR: Codex provider exited with code $rc for $command_file"
@@ -405,11 +465,25 @@ $extra_args"
     done
 
     local strategy_dir="$WORKSPACE/DS-strategy"
+    if [ "$command_file" = "inbox-check" ]; then
+        if ! verify_inbox_check_outputs; then
+            local verification_code=$?
+            notify "🔴 Экзокортекс: inbox-check verification failed" "Extractor/inbox-check не закрыл outcome-loop, проверь extraction report и created artifacts"
+            return "$verification_code"
+        fi
+    fi
+
     if [ -d "$strategy_dir/.git" ]; then
         git -C "$strategy_dir" reset --quiet 2>/dev/null || true
-        git -C "$strategy_dir" add inbox/captures.md inbox/extraction-reports/ inbox/INBOX-TASKS.md >> "$LOG_FILE" 2>&1 || true
+        git -C "$strategy_dir" add \
+            inbox/captures.md \
+            inbox/extraction-reports/ \
+            inbox/INBOX-TASKS.md \
+            inbox/archive/ \
+            inbox/RECOVERY-CATALOG-LOST-INPUTS-*.md \
+            >> "$LOG_FILE" 2>&1 || true
         if ! git -C "$strategy_dir" diff --cached --quiet 2>/dev/null; then
-            git -C "$strategy_dir" commit -m "inbox-check: extraction report $DATE" >> "$LOG_FILE" 2>&1 \
+            git -C "$strategy_dir" commit -m "inbox-check: routed outcomes $DATE" >> "$LOG_FILE" 2>&1 \
                 && log "Committed DS-strategy" \
                 || log "WARN: git commit failed"
         else
@@ -430,6 +504,89 @@ is_work_hours() {
     [ "$hour" -ge 7 ] && [ "$hour" -le 23 ]
 }
 
+latest_inbox_report_for_date() {
+    local target_date="$1"
+    ls -1t "$WORKSPACE/DS-strategy/inbox/extraction-reports/${target_date}-inbox-check"*.md 2>/dev/null | head -n 1
+}
+
+count_report_outcomes() {
+    local report_file="$1"
+    local outcome="$2"
+    grep -Ec "^\*\*Outcome:\*\* .*${outcome}\b" "$report_file" 2>/dev/null || true
+}
+
+report_processed_count() {
+    local report_file="$1"
+    awk -F': ' '/^processed:/ {print $2; exit}' "$report_file" 2>/dev/null
+}
+
+verify_inbox_check_outputs() {
+    local strategy_dir="$WORKSPACE/DS-strategy"
+    local captures_file="$strategy_dir/inbox/captures.md"
+    local inbox_file="$strategy_dir/inbox/INBOX-TASKS.md"
+    local archive_dir="$strategy_dir/inbox/archive/rejected"
+    local archive_index="$strategy_dir/inbox/archive/index.md"
+    local recovery_file="$strategy_dir/inbox/RECOVERY-CATALOG-LOST-INPUTS-$DATE.md"
+    local report_file processed analyzed_count pack_count backlog_count recovery_count rejected_count
+    local backlog_refs pack_refs
+
+    report_file=$(latest_inbox_report_for_date "$DATE")
+    if [ -z "$report_file" ] || [ ! -f "$report_file" ]; then
+        log "ERROR: inbox-check verification failed: no extraction report found for $DATE"
+        return 31
+    fi
+
+    processed=$(report_processed_count "$report_file")
+    processed=${processed:-0}
+
+    if [ "$processed" -gt 0 ] && ! grep -Eq '^\*\*Outcome:\*\* ' "$report_file"; then
+        log "ERROR: inbox-check verification failed: report has processed=$processed but no explicit Outcome fields"
+        return 32
+    fi
+
+    analyzed_count=$(grep -c "\[analyzed $DATE\]" "$captures_file" 2>/dev/null || true)
+    if [ "$processed" -gt 0 ] && [ "$analyzed_count" -lt "$processed" ]; then
+        log "ERROR: inbox-check verification failed: analyzed markers ($analyzed_count) < processed captures ($processed)"
+        return 33
+    fi
+
+    pack_count=$(count_report_outcomes "$report_file" "pack_candidate")
+    backlog_count=$(count_report_outcomes "$report_file" "backlog_task")
+    recovery_count=$(count_report_outcomes "$report_file" "recovery_item")
+    rejected_count=$(count_report_outcomes "$report_file" "rejected")
+
+    if [ "$pack_count" -gt 0 ]; then
+        pack_refs=$(grep -Fc "Extraction report $DATE" "$inbox_file" 2>/dev/null || true)
+        if [ "$pack_refs" -lt "$pack_count" ]; then
+            log "ERROR: inbox-check verification failed: pack_candidate outcomes=$pack_count but INBOX references=$pack_refs"
+            return 34
+        fi
+    fi
+
+    if [ "$backlog_count" -gt 0 ]; then
+        backlog_refs=$(grep -Fc "extracted from inbox-check $DATE" "$inbox_file" 2>/dev/null || true)
+        if [ "$backlog_refs" -lt "$backlog_count" ]; then
+            log "ERROR: inbox-check verification failed: backlog_task outcomes=$backlog_count but INBOX backlog refs=$backlog_refs"
+            return 35
+        fi
+    fi
+
+    if [ "$recovery_count" -gt 0 ] && [ ! -f "$recovery_file" ]; then
+        log "ERROR: inbox-check verification failed: recovery_item outcomes=$recovery_count but recovery catalog missing: $recovery_file"
+        return 36
+    fi
+
+    if [ "$rejected_count" -gt 0 ]; then
+        if [ ! -d "$archive_dir" ] || [ ! -f "$archive_index" ]; then
+            log "ERROR: inbox-check verification failed: rejected outcomes require archive dir and index"
+            return 37
+        fi
+    fi
+
+    log "OK: inbox-check verification passed (processed=$processed, pack=$pack_count, backlog=$backlog_count, recovery=$recovery_count, rejected=$rejected_count)"
+    return 0
+}
+
 load_env
 
 case "${1:-}" in
@@ -437,6 +594,10 @@ case "${1:-}" in
         if ! is_work_hours; then
             log "SKIP: inbox-check outside work hours ($HOUR:00)"
             exit 0
+        fi
+
+        if ! acquire_lock "extractor-inbox-check"; then
+            exit 2
         fi
 
         CAPTURES_FILE="$WORKSPACE/DS-strategy/inbox/captures.md"

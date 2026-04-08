@@ -37,14 +37,17 @@
 **Pass:**
 - создан extraction report с источниками;
 - path resolution корректный;
+- для каждого outcome создан соответствующий trace в `INBOX` / recovery-catalog / archive;
 - если входов нет, verdict truthfully = `SKIP/No pending captures`.
 
 **Partial:**
-- report создан, но требует ручной валидации кандидатов или source mapping.
+- report создан, но требует ручной валидации кандидатов или source mapping;
+- outcome определён, но materialized-артефакт ещё не подтверждён runner'ом.
 
 **Broken:**
 - `captures.md not found` при реально существующем файле;
 - success без extraction report;
+- success без materialized outcome-loop;
 - stale или пустой report при наличии входов.
 
 ### 2. On-Demand Extraction
@@ -112,7 +115,8 @@
 **Pass:**
 - элемент не уходит в пустой `reject`;
 - создан backlog-task или recovery-item;
-- source trace сохранён.
+- source trace сохранён;
+- runner может доказать этот route по созданным файлам, а не только по report.
 
 **Partial:**
 - routing определён правильно, но ещё требует ручного создания backlog/recovery артефакта.
