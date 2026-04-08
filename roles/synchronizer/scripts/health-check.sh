@@ -390,6 +390,26 @@ check_legacy_launchd_conflicts() {
     fi
 }
 
+check_strategist_notify_contract() {
+    local template="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/templates/strategist.sh"
+    local message=""
+
+    if [ ! -f "$template" ]; then
+        WARNINGS+=("🟡 Strategist notify template missing: $template")
+        log "ВНИМАНИЕ: strategist notify template missing: $template"
+        return
+    fi
+
+    message=$(bash -lc "source '$template' && build_message week-review" 2>/dev/null || true)
+
+    if [ -z "$message" ]; then
+        ERRORS+=("🔴 Strategist notify contract broken: week-review template returned empty message")
+        log "ОШИБКА: strategist notify contract broken: week-review template returned empty message"
+    else
+        log "ОК: strategist notify template builds week-review message"
+    fi
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -472,6 +492,7 @@ check_protocol_contract
 check_opening_contract
 check_runtime_contract
 check_legacy_launchd_conflicts
+check_strategist_notify_contract
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
     load_status "$task"
