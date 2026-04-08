@@ -470,8 +470,29 @@ acquire_lock() {
 }
 
 # Читаем strategy_day из конфига (L4 Personal)
-RHYTHM_CONFIG="$HOME/.claude/projects/-Users-$(whoami)-IWE/memory/day-rhythm-config.yaml"
-STRATEGY_DAY_NAME=$(grep 'strategy_day:' "$RHYTHM_CONFIG" 2>/dev/null | awk '{print $2}' || echo "monday")
+resolve_rhythm_config() {
+    local candidates=(
+        "$WORKSPACE_ROOT/memory/day-rhythm-config.yaml"
+        "$HOME/.claude/projects/-Users-$(whoami)-Github/memory/day-rhythm-config.yaml"
+        "$HOME/.claude/projects/-Users-$(whoami)-Github-DS-strategy/memory/day-rhythm-config.yaml"
+        "$HOME/.claude/projects/-Users-$(whoami)-IWE/memory/day-rhythm-config.yaml"
+    )
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+RHYTHM_CONFIG="$(resolve_rhythm_config || true)"
+if [ -n "$RHYTHM_CONFIG" ]; then
+    STRATEGY_DAY_NAME=$(grep 'strategy_day:' "$RHYTHM_CONFIG" 2>/dev/null | awk '{print $2}' | head -1)
+fi
+[ -n "${STRATEGY_DAY_NAME:-}" ] || STRATEGY_DAY_NAME="monday"
+log "Strategy day config: ${RHYTHM_CONFIG:-missing} -> ${STRATEGY_DAY_NAME}"
 # Конвертируем имя дня в номер (1=Mon..7=Sun)
 case "$STRATEGY_DAY_NAME" in
     monday)    STRATEGY_DAY_NUM=1 ;;
