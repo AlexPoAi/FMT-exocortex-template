@@ -18,6 +18,8 @@ fi
 WORKSPACE="$WORKSPACE_ROOT/DS-strategy"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/strategist"
+STATE_DIR="$HOME/.local/state/exocortex"
+STATUS_DIR="$STATE_DIR/status"
 CLAUDE_PATH="${CLAUDE_PATH:-$HOME/.local/bin/claude}"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude-compatible CLI
 AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
@@ -72,6 +74,7 @@ fi
 
 # Создаём папку для логов
 mkdir -p "$LOG_DIR"
+mkdir -p "$STATUS_DIR"
 
 # Определяем день недели и тип сценария
 DAY_OF_WEEK=$(date +%u)  # 1=Mon, 7=Sun
@@ -83,6 +86,87 @@ LOG_FILE="$LOG_DIR/$DATE.log"
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+status_task_for_scenario() {
+    case "$1" in
+        morning|session-prep|day-plan) echo "strategist-morning" ;;
+        note-review) echo "strategist-note-review" ;;
+        week-review) echo "strategist-week-review" ;;
+        *) echo "" ;;
+    esac
+}
+
+shell_quote() {
+    python3 -c 'import shlex,sys; print(shlex.quote(sys.argv[1]))' "${1:-}"
+}
+
+write_status_artifact() {
+    local task="$1"
+    local status="$2"
+    local exit_code="$3"
+    local summary="${4:-}"
+    local evidence_status="${5:-reported}"
+    local evidence_summary="${6:-reported by strategist runner}"
+    local error_summary="${7:-}"
+    local completed_window="${8:-false}"
+    local status_file previous_last_success previous_last_failure now_ts run_id
+
+    [ -n "$task" ] || return 0
+
+    status_file="$STATUS_DIR/${task}.status"
+    previous_last_success=""
+    previous_last_failure=""
+
+    if [ -f "$status_file" ]; then
+        # shellcheck disable=SC1090
+        source "$status_file"
+        previous_last_success="${LAST_SUCCESS_AT:-}"
+        previous_last_failure="${LAST_FAILURE_AT:-}"
+    fi
+
+    now_ts="$(date '+%Y-%m-%d %H:%M:%S')"
+    run_id="$(date '+%Y%m%d-%H%M%S')-$$"
+
+    if [ "$status" = "success" ]; then
+        previous_last_success="$now_ts"
+    fi
+
+    if [ "$status" = "failed" ] || [ "$status" = "timeout" ] || [ "$status" = "auth_failed" ] || [ "$status" = "unsupported_path" ]; then
+        previous_last_failure="$now_ts"
+    fi
+
+    cat > "$status_file" <<EOF
+TASK_NAME=$(shell_quote "$task")
+RUN_ID=$(shell_quote "$run_id")
+STATUS=$(shell_quote "$status")
+EXIT_CODE=$(shell_quote "$exit_code")
+SUMMARY=$(shell_quote "$summary")
+START_TS=$(shell_quote "${SCENARIO_STARTED_AT:-$now_ts}")
+END_TS=$(shell_quote "$now_ts")
+LAST_STARTED_AT=$(shell_quote "${SCENARIO_STARTED_AT:-$now_ts}")
+LAST_FINISHED_AT=$(shell_quote "$now_ts")
+LAST_SUCCESS_AT=$(shell_quote "$previous_last_success")
+LAST_FAILURE_AT=$(shell_quote "$previous_last_failure")
+EVIDENCE_STATUS=$(shell_quote "$evidence_status")
+EVIDENCE_SUMMARY=$(shell_quote "$evidence_summary")
+ERROR_SUMMARY=$(shell_quote "$error_summary")
+STALENESS_BUDGET_SEC=$(shell_quote "${SCENARIO_STALENESS_BUDGET:-86400}")
+PRODUCED_ARTIFACTS=''
+COMPLETED_WINDOW=$(shell_quote "$completed_window")
+LOG_PATH=$(shell_quote "$LOG_FILE")
+UPDATED_AT=$(shell_quote "$now_ts")
+EOF
+}
+
+start_status_tracking() {
+    SCENARIO_STATUS_TASK="$(status_task_for_scenario "$1")"
+    SCENARIO_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+    case "$SCENARIO_STATUS_TASK" in
+        strategist-week-review) SCENARIO_STALENESS_BUDGET=604800 ;;
+        *) SCENARIO_STALENESS_BUDGET=86400 ;;
+    esac
+    write_status_artifact "$SCENARIO_STATUS_TASK" "running" "" "scenario started" "reported" "scenario started by strategist runner" "" "false"
 }
 
 notify() {
@@ -136,6 +220,7 @@ fail_day_close_headless() {
     local message="day-close requires an interactive protocol-close session and is no longer supported via headless strategist.sh. Use the canonical close route instead."
     log "ERROR: $message"
     log "Scenario result: day-close status=unsupported_path exit_code=19 route=protocol-close-interactive"
+    write_status_artifact "$(status_task_for_scenario "day-close")" "unsupported_path" "19" "$message" "reported" "headless route rejected" "$message" "false"
     printf '%s\n' "$message" >&2
     return 19
 }
@@ -245,11 +330,13 @@ run_codex_provider() {
     if [ "$rc" -eq 0 ]; then
         log "Completed scenario: $command_file"
         log "Scenario result: $command_file status=success exit_code=0 provider=codex model=$CODEX_MODEL"
+        write_status_artifact "$SCENARIO_STATUS_TASK" "success" "0" "completed successfully via codex" "verified" "scenario completed via codex provider" "" "true"
         return 0
     fi
 
     log "ERROR: Codex provider exited with code $rc for scenario: $command_file"
     log "Scenario result: $command_file status=failed exit_code=$rc provider=codex model=$CODEX_MODEL"
+    write_status_artifact "$SCENARIO_STATUS_TASK" "failed" "$rc" "codex provider failed" "reported" "codex provider returned non-zero exit" "codex provider failed for $command_file" "false"
     return "$rc"
 }
 
@@ -335,6 +422,7 @@ ${prompt}"
     log "Starting scenario: $command_file"
     log "Command file: $command_path"
     log "Date context: $ru_date_context"
+    start_status_tracking "$command_file"
 
     cd "$WORKSPACE"
 
@@ -398,6 +486,7 @@ ${prompt}"
             relogin_hint=$(claude_reauth_hint)
             notify "🔴 Экзокортекс: provider auth failure" "Стратег/$command_file: Claude-compatible auth истёк. Запусти: $relogin_hint"
             notify_telegram_text "auth-failure" "🔴 <b>Strategist provider auth failure</b>\n\nСценарий: <b>$command_file</b>\nProvider path: <code>${CLAUDE_PATH:-missing}</code>\nДействие: выполнить <code>$relogin_hint</code> и повторить запуск."
+            write_status_artifact "$SCENARIO_STATUS_TASK" "auth_failed" "1" "claude-compatible auth failed" "reported" "provider auth failure detected" "auth failed for $command_file" "false"
             rm -f "$tmp_out"
             return 1
         fi
@@ -406,6 +495,7 @@ ${prompt}"
             rm -f "$tmp_out"
             log "Completed scenario: $command_file"
             log "Scenario result: $command_file status=success exit_code=0 model=$attempt_model"
+            write_status_artifact "$SCENARIO_STATUS_TASK" "success" "0" "completed successfully" "verified" "scenario completed successfully" "" "true"
             break
         fi
 
@@ -428,11 +518,13 @@ ${prompt}"
         if [ "$rc" -eq 124 ]; then
             log "ERROR: Claude-compatible provider timed out after ${CLAUDE_TIMEOUT}s for scenario: $command_file (model=$attempt_model)"
             log "Scenario result: $command_file status=timeout exit_code=$rc model=$attempt_model"
+            write_status_artifact "$SCENARIO_STATUS_TASK" "timeout" "$rc" "claude-compatible provider timed out" "reported" "provider timeout" "timeout for $command_file" "false"
             return 124
         fi
 
         log "ERROR: Claude-compatible provider exited with code $rc for scenario: $command_file (model=$attempt_model)"
         log "Scenario result: $command_file status=failed exit_code=$rc model=$attempt_model"
+        write_status_artifact "$SCENARIO_STATUS_TASK" "failed" "$rc" "claude-compatible provider failed" "reported" "provider returned non-zero exit" "failure for $command_file" "false"
         return "$rc"
     done
 
@@ -478,6 +570,7 @@ acquire_lock() {
 
         if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
             log "SKIP: $scenario already running (lock exists: $lockfile, pid=$existing_pid)"
+            write_status_artifact "$(status_task_for_scenario "$scenario")" "running" "2" "another strategist process holds the scenario lock" "reported" "live lock detected" "" "false"
             exit 2  # non-zero → scheduler won't mark_done
         fi
 
@@ -487,6 +580,7 @@ acquire_lock() {
 
     if ! mkdir "$lockfile" 2>/dev/null; then
         log "SKIP: $scenario already running (lock exists: $lockfile)"
+        write_status_artifact "$(status_task_for_scenario "$scenario")" "running" "2" "another strategist process holds the scenario lock" "reported" "lock directory already exists" "" "false"
         exit 2
     fi
     echo "$$" > "$pidfile"
