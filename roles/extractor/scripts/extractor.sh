@@ -51,7 +51,8 @@ acquire_lock() {
 
     if mkdir "$lock_path" 2>/dev/null; then
         printf '%s\n' "$$" > "$lock_path/pid"
-        trap 'rm -rf "$lock_path"' EXIT
+        EXTRACTOR_ACTIVE_LOCK_PATH="$lock_path"
+        trap 'if [ -n "${EXTRACTOR_ACTIVE_LOCK_PATH:-}" ]; then rm -rf "$EXTRACTOR_ACTIVE_LOCK_PATH"; fi' EXIT
         return 0
     fi
 
@@ -64,7 +65,8 @@ acquire_lock() {
         rm -rf "$lock_path"
         if mkdir "$lock_path" 2>/dev/null; then
             printf '%s\n' "$$" > "$lock_path/pid"
-            trap 'rm -rf "$lock_path"' EXIT
+            EXTRACTOR_ACTIVE_LOCK_PATH="$lock_path"
+            trap 'if [ -n "${EXTRACTOR_ACTIVE_LOCK_PATH:-}" ]; then rm -rf "$EXTRACTOR_ACTIVE_LOCK_PATH"; fi' EXIT
             log "WARN: removed stale extractor lock $lock_name (pid=$existing_pid)"
             return 0
         fi
