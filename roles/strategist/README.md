@@ -5,6 +5,8 @@
 
 Роль Стратег автоматизирует операционное планирование: утренние планы, вечерние итоги, недельные обзоры. Текущий исполнитель: Codex-primary / Claude-fallback.
 
+> Truthful note: operational planning и ритуальный coordination-layer подтверждены практикой. Полный структурный разбор хаоса входящих и recovery размазанных задач по нескольким репозиториям пока не считается доказанной capability Strategist без отдельной верификации.
+
 ---
 
 ## Архитектура: Промпты → Стратег → Результаты
@@ -55,6 +57,14 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 | 6 | Проверить задачу (WP Gate) | `prompts/check-plan.md` | WP Gate | В шаблоне |
 | 7 | Закрытие дня | `memory/protocol-close.md` | Вручную | В шаблоне |
 | 8 | Обзор заметок | DS: `note-review.md` | По необходимости | Создаётся пользователем |
+
+## Acceptance
+
+- [ACCEPTANCE.md](/Users/alexander/Github/FMT-exocortex-template/roles/strategist/ACCEPTANCE.md) — truthful runbook для сценариев `pass / partial / broken`
+
+Короткая семантика:
+- `WP Gate`, `morning/day-plan`, `week-review`, `note-review` — confirmed operational scope
+- `chaos-structuring` и recovery размазанных входов — пока target capability, не verified-by-default
 
 ---
 
