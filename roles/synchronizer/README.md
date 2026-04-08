@@ -10,6 +10,8 @@
 3. **Notify:** Отправляет результаты в Telegram
 4. **Report:** Генерирует ежедневный отчёт здоровья системы
 
+> Truthful note: Synchronizer подтверждён как operational dispatcher и reporting layer. Он пока не считается полностью оформленным acceptance-harness для проверки зрелости всех агентов без отдельной verification-логики.
+
 ## Компоненты
 
 | Скрипт | Что делает | Триггер |
