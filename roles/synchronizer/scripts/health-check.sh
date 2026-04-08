@@ -369,6 +369,27 @@ check_runtime_contract() {
     fi
 }
 
+check_legacy_launchd_conflicts() {
+    local loaded=""
+
+    if launchctl list | grep -q 'com.strategist.morning'; then
+        loaded="$loaded com.strategist.morning"
+    fi
+
+    if launchctl list | grep -q 'com.strategist.weekreview'; then
+        loaded="$loaded com.strategist.weekreview"
+    fi
+
+    loaded=$(printf '%s' "$loaded" | xargs 2>/dev/null || true)
+
+    if [ -n "$loaded" ]; then
+        ERRORS+=("🔴 Legacy Strategist launchd jobs loaded alongside scheduler: $loaded")
+        log "ОШИБКА: legacy Strategist launchd jobs loaded alongside scheduler: $loaded"
+    else
+        log "ОК: legacy Strategist launchd jobs are not loaded"
+    fi
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -450,6 +471,7 @@ fi
 check_protocol_contract
 check_opening_contract
 check_runtime_contract
+check_legacy_launchd_conflicts
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
     load_status "$task"
