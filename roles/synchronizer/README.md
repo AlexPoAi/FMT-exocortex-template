@@ -12,6 +12,16 @@
 
 > Truthful note: Synchronizer подтверждён как operational dispatcher и reporting layer. Он пока не считается полностью оформленным acceptance-harness для проверки зрелости всех агентов без отдельной verification-логики.
 
+## Acceptance
+
+Truthful acceptance-семантика и критерии `pass / partial / broken` описаны в [ACCEPTANCE.md](./ACCEPTANCE.md).
+
+Operationally confirmed:
+- `scheduler.sh`, `health-check.sh`, `daily-report.sh`, runtime/status refresh
+
+Target capability:
+- единый acceptance-harness для зрелости всего агентного слоя без отдельной инженерной настройки
+
 ## Компоненты
 
 | Скрипт | Что делает | Триггер |
