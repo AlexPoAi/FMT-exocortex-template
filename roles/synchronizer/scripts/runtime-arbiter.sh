@@ -14,7 +14,9 @@
 
 set -euo pipefail
 
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
 STRATEGY_DIR="$WORKSPACE_DIR/DS-strategy"
 CURRENT_DIR="$STRATEGY_DIR/current"
 STATE_DIR="$HOME/.local/state/exocortex"

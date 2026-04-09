@@ -4,17 +4,20 @@
 
 set -e
 
-# Предотвращаем сон: -i (idle, работает на батарее) -d (display) -u (user activity)
-# Флаг -s (system sleep) не используем — он НЕ работает на батарее (OBC может переключить профиль)
-caffeinate -diu -w $$ &
+# Предотвращаем сон только на macOS
+if command -v caffeinate >/dev/null 2>&1; then
+    caffeinate -diu -w $$ &
+fi
 
 # Конфигурация
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-WORKSPACE_ROOT="$HOME/Github"
-if [ ! -d "$WORKSPACE_ROOT/DS-strategy/.git" ]; then
-    WORKSPACE_ROOT="$HOME/IWE"
+RESOLVE_WORKSPACE_SH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/resolve-workspace.sh"
+if [ ! -x "$RESOLVE_WORKSPACE_SH" ]; then
+    RESOLVE_WORKSPACE_SH="$(cd "$SCRIPT_DIR/../../synchronizer/scripts" && pwd)/resolve-workspace.sh"
 fi
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
+WORKSPACE_ROOT="$WORKSPACE_DIR"
 WORKSPACE="$WORKSPACE_ROOT/DS-strategy"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/strategist"
@@ -28,7 +31,7 @@ AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 CODEX_TIMEOUT="${CODEX_TIMEOUT:-1200}"
-RUNTIME_ARBITER_PATH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
+RUNTIME_ARBITER_PATH="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/runtime-arbiter.sh"
 GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
 [ -n "$GITHUB_USER" ] || GITHUB_USER="AlexPoAi"
 
@@ -218,7 +221,7 @@ notify_telegram() {
 notify_telegram_text() {
     local scenario="$1"
     local text="$2"
-    NOTIFY_TEXT="$text" "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist "$scenario" >> "$LOG_FILE" 2>&1 || true
+    NOTIFY_TEXT="$text" "$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/notify.sh" strategist "$scenario" >> "$LOG_FILE" 2>&1 || true
 }
 
 has_codex_fallback() {
@@ -392,10 +395,10 @@ resolve_command_path() {
 
     case "$command_file" in
         day-close)
-            printf '%s\n' "$HOME/Github/FMT-exocortex-template/memory/protocol-close.md"
+            printf '%s\n' "$FMT_EXOCORTEX_DIR/memory/protocol-close.md"
             ;;
         day-plan)
-            printf '%s\n' "$HOME/Github/FMT-exocortex-template/memory/protocol-open.md"
+            printf '%s\n' "$FMT_EXOCORTEX_DIR/memory/protocol-open.md"
             ;;
         *)
             printf '%s\n' "$PROMPTS_DIR/$command_file.md"
@@ -808,7 +811,7 @@ case "$1" in
             if [ -f "$ENV_FILE" ]; then
                 set -a; source "$ENV_FILE"; set +a
                 ALERT_TEXT="⚠️ <b>Note-Review canary</b>: Step 10 не сработал ($BOLD_NEW_BEFORE → $BOLD_NEW_AFTER new bold). Deterministic cleanup applied."
-                if ! NOTIFY_TEXT="$ALERT_TEXT" "$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" strategist note-review-canary >> "$LOG_FILE" 2>&1; then
+                if ! NOTIFY_TEXT="$ALERT_TEXT" "$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/notify.sh" strategist note-review-canary >> "$LOG_FILE" 2>&1; then
                     ALERT_JSON=$(printf '%s' "$ALERT_TEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
                     curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
                         -H "Content-Type: application/json" \

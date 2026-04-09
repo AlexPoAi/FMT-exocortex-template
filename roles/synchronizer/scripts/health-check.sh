@@ -4,6 +4,8 @@
 set -euo pipefail
 
 LOG_DIR="$HOME/logs/health-check"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 DATE=$(date '+%Y-%m-%d')
 HOUR=$(date +%H)
@@ -13,7 +15,7 @@ LOG_FILE="$LOG_DIR/$DATE.log"
 ENV_FILE="$HOME/.config/aist/env"
 STATE_DIR="$HOME/.local/state/exocortex"
 STATUS_DIR="$STATE_DIR/status"
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
 CANONICAL_MEMORY_DIR="$WORKSPACE_DIR/memory"
 OPENING_CONTRACT_CHECK_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/opening-contract-check.sh"
 RUNTIME_ARBITER_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
@@ -41,7 +43,7 @@ notify_macos() {
 
 notify_telegram() {
     local message="$1"
-    local notify_script="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh"
+    local notify_script="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/notify.sh"
 
     if [ -x "$notify_script" ]; then
         NOTIFY_TEXT="$message" "$notify_script" synchronizer health-check > /dev/null 2>&1 && return 0

@@ -8,15 +8,19 @@
 
 set -euo pipefail
 
-STRATEGY_DIR="$HOME/Github/DS-strategy"
-AGENT_WORKSPACE="$HOME/Github/DS-agent-workspace"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
+
+STRATEGY_DIR="$DS_STRATEGY_DIR"
+AGENT_WORKSPACE="$DS_AGENT_WORKSPACE_DIR"
 STATE_DIR="$HOME/.local/state/exocortex"
 LOG_DIR="$HOME/logs/synchronizer"
 ENV_FILE="$HOME/.config/aist/env"
 LEGACY_TOKEN_FILE="$HOME/.config/exocortex/telegram-token"
 LEGACY_CHAT_ID_FILE="$HOME/.config/exocortex/telegram-chat-id"
-NOTIFY_SCRIPT="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh"
-DAILY_REPORT_SCRIPT="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/daily-report.sh"
+NOTIFY_SCRIPT="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/notify.sh"
+DAILY_REPORT_SCRIPT="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/daily-report.sh"
 
 mkdir -p "$STATE_DIR"
 

@@ -33,10 +33,8 @@ SYNC_DIR="$(dirname "$SCRIPT_DIR")"
 STATE_DIR="$HOME/.local/state/exocortex"
 LOG_DIR="$HOME/logs/synchronizer"
 LOG_FILE="$LOG_DIR/scheduler-$(date +%Y-%m-%d).log"
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
-if [ ! -d "$WORKSPACE_DIR/FMT-exocortex-template/.git" ] && [ -d "$HOME/IWE/FMT-exocortex-template/.git" ]; then
-    WORKSPACE_DIR="$HOME/IWE"
-fi
+RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
 SCHEDULER_RUNTIME_FILE="$WORKSPACE_DIR/DS-strategy/current/SCHEDULER-RUNTIME.env"
 
 if [ -f "$SCHEDULER_RUNTIME_FILE" ]; then

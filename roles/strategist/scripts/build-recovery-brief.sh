@@ -3,7 +3,14 @@
 
 set -euo pipefail
 
-WORKSPACE_ROOT="${1:-$HOME/Github}"
+if [ -n "${1:-}" ]; then
+    WORKSPACE_ROOT="$1"
+else
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    RESOLVE_WORKSPACE_SH="$(cd "$SCRIPT_DIR/../../synchronizer/scripts" && pwd)/resolve-workspace.sh"
+    eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
+    WORKSPACE_ROOT="$WORKSPACE_DIR"
+fi
 STRATEGY_DIR="$WORKSPACE_ROOT/DS-strategy"
 CURRENT_DIR="$STRATEGY_DIR/current"
 OUTPUT_FILE="$CURRENT_DIR/RECOVERY-BRIEF.md"

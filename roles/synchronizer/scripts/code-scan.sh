@@ -4,14 +4,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WORKSPACE="$HOME/Github"
-if [[ "$WORKSPACE" == *"{{HOME_DIR}}"* ]] || [ ! -d "$WORKSPACE" ]; then
-    if [ -d "$HOME/Github" ]; then
-        WORKSPACE="$HOME/Github"
-    elif [ -d "$HOME/IWE" ]; then
-        WORKSPACE="$HOME/IWE"
-    fi
-fi
+RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
+WORKSPACE="$WORKSPACE_DIR"
 LOG_DIR="$HOME/logs/synchronizer"
 DATE=$(date +%Y-%m-%d)
 LOG_FILE="$LOG_DIR/code-scan-$DATE.log"

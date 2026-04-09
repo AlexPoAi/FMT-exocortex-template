@@ -13,18 +13,19 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
 STATE_DIR="$HOME/.local/state/exocortex"
 STATUS_DIR="$STATE_DIR/status"
 LOG_DIR="$HOME/logs/synchronizer"
-STRATEGY_DIR="$HOME/Github/DS-strategy"
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
+STRATEGY_DIR="$DS_STRATEGY_DIR"
 CANONICAL_MEMORY_DIR="$WORKSPACE_DIR/memory"
 RUNTIME_ARBITER_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
 RUNTIME_POLICY_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-POLICY.env"
 RUNTIME_MODE_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-MODE.md"
 
 # Agent Workspace: если существует — отчёты идут туда
-AGENT_WORKSPACE="$HOME/Github/DS-agent-workspace"
+AGENT_WORKSPACE="$DS_AGENT_WORKSPACE_DIR"
 if [ -d "$AGENT_WORKSPACE/.git" ]; then
     REPORT_DIR="$AGENT_WORKSPACE/scheduler/reports"
     ARCHIVE_DIR="$AGENT_WORKSPACE/scheduler/reports/archive"

@@ -6,14 +6,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-WORKSPACE_ROOT="$HOME/Github"
-if [[ "$WORKSPACE_ROOT" == *"{{HOME_DIR}}"* ]] || [ ! -d "$WORKSPACE_ROOT/DS-strategy/.git" ]; then
-    if [ -d "$HOME/Github/DS-strategy/.git" ]; then
-        WORKSPACE_ROOT="$HOME/Github"
-    elif [ -d "$HOME/IWE/DS-strategy/.git" ]; then
-        WORKSPACE_ROOT="$HOME/IWE"
-    fi
+RESOLVE_WORKSPACE_SH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/resolve-workspace.sh"
+if [ ! -x "$RESOLVE_WORKSPACE_SH" ]; then
+    RESOLVE_WORKSPACE_SH="$(cd "$SCRIPT_DIR/../../synchronizer/scripts" && pwd)/resolve-workspace.sh"
 fi
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
+WORKSPACE_ROOT="$WORKSPACE_DIR"
 WORKSPACE="$WORKSPACE_ROOT"
 PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/extractor"
@@ -31,7 +29,7 @@ AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 CODEX_TIMEOUT="${CODEX_TIMEOUT:-1200}"
 AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
-RUNTIME_ARBITER_PATH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
+RUNTIME_ARBITER_PATH="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/runtime-arbiter.sh"
 
 mkdir -p "$LOG_DIR"
 mkdir -p "$LOCK_DIR"

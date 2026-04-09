@@ -3,7 +3,9 @@
 
 set -euo pipefail
 
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
+eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
 CANONICAL_MEMORY_FILE="$WORKSPACE_DIR/memory/MEMORY.md"
 ROOT_MEMORY_FILE="$WORKSPACE_DIR/MEMORY.md"
 
