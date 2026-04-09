@@ -134,6 +134,14 @@ bash setup/optional/setup-cloud-scheduler.sh
 bash setup/optional/setup-vps-agent-runtime.sh --workspace "$HOME/Github" --interval-minutes 15
 ```
 
+### Быстрый deploy с локальной машины
+
+Если SSH к VPS доступен, можно сразу синхронизировать `FMT-exocortex-template` + `DS-strategy` и затем поставить runtime:
+
+```bash
+bash setup/optional/deploy-vps-exocortex-runtime.sh --host root@72.56.4.61 --local-workspace "$HOME/Github" --remote-workspace /root/Github --interval-minutes 15
+```
+
 ### Проверка
 
 ```bash
@@ -155,6 +163,7 @@ EXOCORTEX_DISABLE_LOCAL_DISPATCH=1
 
 | File | Purpose |
 |------|---------|
+| `deploy-vps-exocortex-runtime.sh` | Sync локального workspace на VPS + установка runtime |
 | `setup-vps-agent-runtime.sh` | Установка systemd runtime на VPS |
 | `systemd/com.exocortex.scheduler.service.template` | Service template |
 | `systemd/com.exocortex.scheduler.timer.template` | Timer template |
