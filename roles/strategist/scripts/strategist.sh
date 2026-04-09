@@ -84,6 +84,7 @@ DATE=$(date +%Y-%m-%d)
 # Лог файл
 LOG_FILE="$LOG_DIR/$DATE.log"
 RECOVERY_BRIEF_SCRIPT="$SCRIPT_DIR/build-recovery-brief.sh"
+RECOVERY_WEEKPLAN_SYNC_SCRIPT="$SCRIPT_DIR/sync-recovery-into-weekplan.sh"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
@@ -103,6 +104,22 @@ refresh_recovery_brief() {
     fi
 
     log "WARN: recovery brief script missing or not executable: $RECOVERY_BRIEF_SCRIPT"
+    return 1
+}
+
+refresh_recovery_weekplan_context() {
+    if [ -x "$RECOVERY_WEEKPLAN_SYNC_SCRIPT" ]; then
+        local target_path
+        target_path=$("$RECOVERY_WEEKPLAN_SYNC_SCRIPT" "$WORKSPACE_ROOT" 2>>"$LOG_FILE" || true)
+        if [ -n "$target_path" ] && [ -f "$target_path" ]; then
+            log "Recovery synced into WeekPlan: $target_path"
+            return 0
+        fi
+        log "WARN: recovery sync did not produce a WeekPlan path"
+        return 1
+    fi
+
+    log "WARN: recovery weekplan sync script missing or not executable: $RECOVERY_WEEKPLAN_SYNC_SCRIPT"
     return 1
 }
 
@@ -700,6 +717,7 @@ case "$1" in
         if [ "$DAY_OF_WEEK" -eq "$STRATEGY_DAY_NUM" ]; then
             log "Strategy day ($STRATEGY_DAY_NAME): running session prep"
             refresh_recovery_brief || true
+            refresh_recovery_weekplan_context || true
             run_claude "session-prep"
             notify_telegram "session-prep"
         else
@@ -736,6 +754,7 @@ case "$1" in
     "session-prep")
         log "Manual: running session prep"
         refresh_recovery_brief || true
+        refresh_recovery_weekplan_context || true
         run_claude "session-prep"
         notify_telegram "session-prep"
         ;;
