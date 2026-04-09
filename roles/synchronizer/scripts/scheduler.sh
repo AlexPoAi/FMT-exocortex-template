@@ -37,6 +37,18 @@ WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
 if [ ! -d "$WORKSPACE_DIR/FMT-exocortex-template/.git" ] && [ -d "$HOME/IWE/FMT-exocortex-template/.git" ]; then
     WORKSPACE_DIR="$HOME/IWE"
 fi
+SCHEDULER_RUNTIME_FILE="$WORKSPACE_DIR/DS-strategy/current/SCHEDULER-RUNTIME.env"
+
+if [ -f "$SCHEDULER_RUNTIME_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$SCHEDULER_RUNTIME_FILE"
+    set +a
+fi
+
+EXOCORTEX_RUNTIME_TARGET="${EXOCORTEX_RUNTIME_TARGET:-local}"
+EXOCORTEX_DISABLE_LOCAL_DISPATCH="${EXOCORTEX_DISABLE_LOCAL_DISPATCH:-0}"
+
 ROLES_DIR="$WORKSPACE_DIR/FMT-exocortex-template/roles"
 NOTIFY_SH="$SCRIPT_DIR/notify.sh"
 
@@ -146,6 +158,12 @@ pre_archive_dayplan() {
 
 dispatch() {
     log "dispatch started (hour=$HOUR, dow=$DOW)"
+
+    if [ "$EXOCORTEX_DISABLE_LOCAL_DISPATCH" = "1" ]; then
+        log "dispatch skipped: local dispatch disabled by $SCHEDULER_RUNTIME_FILE (runtime_target=$EXOCORTEX_RUNTIME_TARGET)"
+        return 0
+    fi
+
     local ran=0
 
     # --- Pre-archive: убрать вчерашний DayPlan ДО генерации нового ---
@@ -304,6 +322,9 @@ dispatch() {
 show_status() {
     echo "=== Exocortex Scheduler Status ==="
     echo "Date: $DATE  Hour: $HOUR  DOW: $DOW  Week: W$WEEK"
+    echo "Runtime target: $EXOCORTEX_RUNTIME_TARGET"
+    echo "Local dispatch disabled: $EXOCORTEX_DISABLE_LOCAL_DISPATCH"
+    echo "Runtime config: $SCHEDULER_RUNTIME_FILE"
     echo ""
 
     echo "--- Today's runs ---"

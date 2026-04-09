@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Exocortex Scheduler periodically
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec={{INTERVAL_MINUTES}}min
+Persistent=true
+Unit=com.exocortex.scheduler.service
+
+[Install]
+WantedBy=timers.target

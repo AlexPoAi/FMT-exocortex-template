@@ -228,6 +228,20 @@ EOF
 }
 
 write_mode_file() {
+    local truthful_local_line
+    local truthful_product_line
+    local truthful_provider_line
+
+    if [ "$AI_RUNTIME_POLICY" = "cloud-primary" ] || [ "$CLOUD_TAKEOVER_SCOPE" = "all-agents" ]; then
+        truthful_local_line="- Local agents (\`strategist\`, \`extractor\`, \`scheduler\`) переведены в \`cloud-primary\`; локальный dispatch должен быть standby-only."
+        truthful_product_line="- Product services (\`VK-offee-rag\`, \`VK-offee/telegram-bot\`) остаются \`cloud-primary\` контуром."
+    else
+        truthful_local_line="- Local agents (\`strategist\`, \`extractor\`, \`scheduler\`) остаются \`local-primary\` до отдельного runtime redesign."
+        truthful_product_line="- Product services (\`VK-offee-rag\`, \`VK-offee/telegram-bot\`) считаются \`cloud-primary\` контуром."
+    fi
+
+    truthful_provider_line="- Provider selection для активного runtime должен брать \`$provider_primary\`, пока он доступен."
+
     cat > "$MODE_FILE" <<EOF
 ---
 type: runtime-mode
@@ -257,9 +271,9 @@ cloud_takeover_scope: $CLOUD_TAKEOVER_SCOPE
 
 ## Truthful Verdict
 
-- Local agents (\`strategist\`, \`extractor\`, \`scheduler\`) остаются \`local-primary\` до отдельного runtime redesign.
-- Product services (\`VK-offee-rag\`, \`VK-offee/telegram-bot\`) считаются \`cloud-primary\` контуром.
-- Provider selection для локальных агентов должен брать \`$provider_primary\`, пока он доступен.
+$truthful_local_line
+$truthful_product_line
+$truthful_provider_line
 - Если primary provider станет недоступен, runner должен переключаться на доступный fallback-provider без ручного переписывания скриптов.
 EOF
 

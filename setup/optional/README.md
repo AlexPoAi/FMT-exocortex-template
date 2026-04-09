@@ -118,6 +118,49 @@ bash setup/optional/setup-cloud-scheduler.sh
 
 ---
 
+## VPS Agent Runtime (systemd)
+
+Если Mac выключается, этот слой делает `scheduler dispatch` always-on на Linux VPS.
+
+### Что делает
+
+- Ставит `systemd` service+timer для `com.exocortex.scheduler`
+- Запускает `scheduler.sh dispatch` по интервалу (по умолчанию каждые 15 минут)
+- Убирает зависимость от локального `launchd`
+
+### Установка на VPS
+
+```bash
+bash setup/optional/setup-vps-agent-runtime.sh --workspace "$HOME/Github" --interval-minutes 15
+```
+
+### Проверка
+
+```bash
+sudo systemctl status com.exocortex.scheduler.timer --no-pager
+sudo systemctl list-timers | grep com.exocortex.scheduler
+sudo systemctl start com.exocortex.scheduler.service
+```
+
+### Локальный standby (необязательно)
+
+Чтобы избежать двойных запусков после миграции на VPS, в локальном `DS-strategy/current/SCHEDULER-RUNTIME.env` выставьте:
+
+```bash
+EXOCORTEX_RUNTIME_TARGET=vps
+EXOCORTEX_DISABLE_LOCAL_DISPATCH=1
+```
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `setup-vps-agent-runtime.sh` | Установка systemd runtime на VPS |
+| `systemd/com.exocortex.scheduler.service.template` | Service template |
+| `systemd/com.exocortex.scheduler.timer.template` | Timer template |
+
+---
+
 ## Cover Images (S48)
 
 Автоматическая генерация обложек для постов через OpenAI GPT Image API. Каждая обложка уникальна и отражает содержание статьи.

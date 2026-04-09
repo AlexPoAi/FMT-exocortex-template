@@ -1,0 +1,17 @@
+[Unit]
+Description=Exocortex Scheduler Dispatch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{USER}}
+Group={{USER}}
+WorkingDirectory={{WORKSPACE_DIR}}
+EnvironmentFile=-/etc/default/exocortex-scheduler
+Environment=WORKSPACE_DIR={{WORKSPACE_DIR}}
+ExecStart=/usr/bin/env bash {{WORKSPACE_DIR}}/FMT-exocortex-template/roles/synchronizer/scripts/scheduler.sh dispatch
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
