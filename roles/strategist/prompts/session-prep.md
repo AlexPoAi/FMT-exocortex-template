@@ -8,6 +8,7 @@
 - **Документы стратегии:** {{WORKSPACE_DIR}}/DS-strategy/docs/ (ВСЕ файлы: Strategy.md, Dissatisfactions.md, Session Agenda.md)
 - **Inbox:** {{WORKSPACE_DIR}}/DS-strategy/inbox/ ([fleeting-notes.md](https://github.com/{{GITHUB_USER}}/DS-strategy/blob/main/inbox/fleeting-notes.md) + свежие файлы за неделю)
 - **Recovery:** {{WORKSPACE_DIR}}/DS-strategy/inbox/RECOVERY-CATALOG-LOST-INPUTS-*.md
+- **Recovery Brief:** {{WORKSPACE_DIR}}/DS-strategy/current/RECOVERY-BRIEF.md
 - **SPOKE (планы репо):** {{WORKSPACE_DIR}}/*/WORKPLAN.md
 - **Стратегические карты:** {{WORKSPACE_DIR}}/*/MAPSTRATEGIC.md (если есть в репо)
 - **MEMORY:** ~/.claude/projects/{{CLAUDE_PROJECT_SLUG}}/memory/MEMORY.md
@@ -48,6 +49,7 @@ DS-strategy/
 - Прочитай `DS-strategy/inbox/fleeting-notes.md`
 - Прочитай ВСЕ файлы из `DS-strategy/inbox/` (кроме .DS_Store и .docx)
 - Прочитай актуальный `RECOVERY-CATALOG-LOST-INPUTS-*.md` (если есть) и выдели элементы со статусами `new` / `needs source recovery` / `active`
+- Прочитай `DS-strategy/current/RECOVERY-BRIEF.md` (если есть) как compact source-of-truth для recovery-return loop
 - Прочитай QA-отчёт бота: `DS-agent-workspace/scheduler/feedback-triage/` (последний по дате) — **структурированный отчёт** из feedback_triage DB: замечания (✏️) первые, urgent (high/critical) вторые, кластеры проблем третьи. Auto-triage уже выполнен ботом → Session-Prep проверяет кластеры (≥3 = **urgent** → WP-debt) и помечает resolved
 - Для каждой заметки/файла определи: → в план недели? → capture в Pack? → в повестку для обсуждения? → удалить?
 - **Недельная агрегация Inbox Triage:**
