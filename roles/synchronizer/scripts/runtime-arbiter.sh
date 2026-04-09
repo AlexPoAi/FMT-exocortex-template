@@ -55,15 +55,43 @@ cloud_rag_reason="health_url_not_configured"
 provider_primary="unavailable"
 provider_reason="no_provider_available"
 
+resolve_codex_path() {
+    local candidate
+
+    if [ -n "${CODEX_PATH:-}" ] && [ -x "${CODEX_PATH:-}" ]; then
+        printf '%s\n' "$CODEX_PATH"
+        return 0
+    fi
+
+    candidate=$(command -v codex 2>/dev/null || true)
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    for candidate in \
+        "/Applications/Codex.app/Contents/Resources/codex" \
+        "/usr/local/bin/codex" \
+        "/opt/homebrew/bin/codex" \
+        "$HOME/.local/bin/codex"; do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 check_codex() {
     local codex_path
-    codex_path=$(command -v codex 2>/dev/null || true)
-    if [ -z "$codex_path" ]; then
+    codex_path=$(resolve_codex_path 2>/dev/null || true)
+    if [ -z "$codex_path" ] || [ ! -x "$codex_path" ]; then
         return
     fi
 
-    if codex login status >/tmp/runtime-arbiter-codex.log 2>&1; then
-        if grep -q "Logged in" /tmp/runtime-arbiter-codex.log 2>/dev/null; then
+    if "$codex_path" login status >/tmp/runtime-arbiter-codex.log 2>&1; then
+        if grep -Eiq "logged in|authenticated" /tmp/runtime-arbiter-codex.log 2>/dev/null; then
             codex_available=1
             codex_status="available"
             codex_reason="login_ok"
