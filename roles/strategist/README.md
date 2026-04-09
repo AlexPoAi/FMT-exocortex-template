@@ -5,7 +5,7 @@
 
 Роль Стратег автоматизирует операционное планирование: утренние планы, вечерние итоги, недельные обзоры. Текущий исполнитель: Codex-primary / Claude-fallback.
 
-> Truthful note: operational planning и ритуальный coordination-layer подтверждены практикой. Полный структурный разбор хаоса входящих и recovery размазанных задач по нескольким репозиториям пока не считается доказанной capability Strategist без отдельной верификации.
+> Truthful note: operational planning и ритуальный coordination-layer подтверждены практикой. Recovery-return contract для `Strategist` уже прошит в weekly/session-prep prompt layer: он должен поднимать элементы из `RECOVERY-CATALOG-LOST-INPUTS-*` в weekly triage и возвращать их в `WeekPlan` или backlog. Но полный end-to-end recovery loop всё ещё не считается доказанной capability без отдельной живой верификации.
 
 ---
 
@@ -64,7 +64,8 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 
 Короткая семантика:
 - `WP Gate`, `morning/day-plan`, `week-review`, `note-review` — confirmed operational scope
-- `chaos-structuring` и recovery размазанных входов — пока target capability, не verified-by-default
+- `chaos-structuring` и полный recovery размазанных входов — пока target capability, не verified-by-default
+- `recovery-return loop` в `session-prep` уже описан как обязательный contract, но ещё требует live proof
 
 ---
 

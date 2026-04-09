@@ -24,6 +24,7 @@
 - самостоятельный структурный разбор хаоса по нескольким репозиториям;
 - end-to-end recovery потерянных входов в единый каталог;
 - автономная каталогизация knowledge-layer по Pack'ам и point-hub без отдельного recovery/KE workflow.
+- автоматический recovery-return loop, где элементы из recovery-catalog получают weekly/backlog verdict без ручного мостика.
 
 ## Verification scenarios
 
@@ -99,6 +100,26 @@
 - claim заявлен, но end-to-end сценарий не выполнен.
 
 > До отдельной живой проверки этот сценарий считать `target capability`, а не подтверждённой способностью.
+
+### 5. Recovery Return Loop
+
+**Что проверяем:**
+- читает ли `Strategist` актуальный `RECOVERY-CATALOG-LOST-INPUTS-*`;
+- возвращает ли recovered items в weekly triage, `WeekPlan` или backlog;
+- не оставляет ли recovery catalog отдельной свалкой без weekly/governance verdict.
+
+**Pass:**
+- recovery items отражены в weekly triage;
+- для каждого элемента есть явный verdict: `WeekPlan / backlog / keep in recovery`;
+- хотя бы один recovered item дошёл до управляемого weekly/backlog контура.
+
+**Partial:**
+- recovery catalog прочитан и отражён в повестке, но ещё без полного materialized follow-up в WeekPlan/INBOX.
+
+**Broken:**
+- recovery catalog игнорируется;
+- recovered items остаются отдельно от weekly/backlog orchestration;
+- `Strategist` заявляет weekly triage completed, но recovery layer туда не включён.
 
 ## Truthful verdict rules
 
