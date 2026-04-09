@@ -27,6 +27,7 @@ AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
 AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
+CODEX_TIMEOUT="${CODEX_TIMEOUT:-1200}"
 RUNTIME_ARBITER_PATH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
 GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
 [ -n "$GITHUB_USER" ] || GITHUB_USER="AlexPoAi"
@@ -262,6 +263,11 @@ is_model_unavailable_error() {
     grep -Eqi 'model_unavailable|model unavailable|model_not_found|invalid model|unsupported model|not available on (this|your) account|requested model is not available|no model named|API Error: 503.*model|overloaded_error|API Error: 400 .*"code":"E005".*"Invalid request"|invalid_request_error' "$output_file" 2>/dev/null
 }
 
+is_provider_runtime_error() {
+    local output_file="$1"
+    grep -Eqi 'API Error: 5[0-9]{2}|Internal server error|service unavailable|upstream connect error|gateway timeout|bad gateway|temporarily unavailable|E015' "$output_file" 2>/dev/null
+}
+
 count_bold_notes() {
     local file="$1"
     [ -f "$file" ] || {
@@ -309,7 +315,7 @@ run_codex_provider() {
     tmp_msg=$(mktemp)
 
     log "WARN: falling back to Codex for $command_file (reason=$reason, model=$CODEX_MODEL)"
-    "$CODEX_PATH" exec \
+    timeout "$CODEX_TIMEOUT" "$CODEX_PATH" exec \
         --skip-git-repo-check \
         -C "$WORKSPACE" \
         --output-last-message "$tmp_msg" \
@@ -332,6 +338,13 @@ run_codex_provider() {
         log "Scenario result: $command_file status=success exit_code=0 provider=codex model=$CODEX_MODEL"
         write_status_artifact "$SCENARIO_STATUS_TASK" "success" "0" "completed successfully via codex" "verified" "scenario completed via codex provider" "" "true"
         return 0
+    fi
+
+    if [ "$rc" -eq 124 ]; then
+        log "ERROR: Codex provider timed out after ${CODEX_TIMEOUT}s for scenario: $command_file"
+        log "Scenario result: $command_file status=timeout exit_code=$rc provider=codex model=$CODEX_MODEL"
+        write_status_artifact "$SCENARIO_STATUS_TASK" "timeout" "$rc" "codex provider timed out" "reported" "codex provider timeout" "codex timeout for $command_file" "false"
+        return 124
     fi
 
     log "ERROR: Codex provider exited with code $rc for scenario: $command_file"
@@ -510,6 +523,15 @@ ${prompt}"
             if has_codex_fallback; then
                 rm -f "$tmp_out"
                 run_codex_provider "$command_file" "$prompt" "claude_models_unavailable"
+                return $?
+            fi
+        fi
+
+        if is_provider_runtime_error "$tmp_out"; then
+            if has_codex_fallback; then
+                log "WARN: Claude-compatible provider runtime failure for $command_file on $attempt_model — falling back to Codex"
+                rm -f "$tmp_out"
+                run_codex_provider "$command_file" "$prompt" "claude_provider_runtime_failure"
                 return $?
             fi
         fi
