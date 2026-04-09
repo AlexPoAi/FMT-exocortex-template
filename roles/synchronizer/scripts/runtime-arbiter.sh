@@ -140,9 +140,15 @@ check_claude() {
 }
 
 check_local_control_plane() {
-    if launchctl list | grep -q 'com.exocortex.scheduler'; then
+    if command -v launchctl >/dev/null 2>&1 && launchctl list | grep -q 'com.exocortex.scheduler'; then
         local_control_plane="available"
         local_control_reason="launchctl_scheduler_loaded"
+        return
+    fi
+
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet com.exocortex.scheduler.timer; then
+        local_control_plane="available"
+        local_control_reason="systemd_scheduler_active"
         return
     fi
 

@@ -71,6 +71,12 @@ rsync -az --delete \
     "$LOCAL_WORKSPACE/DS-strategy/" \
     "$REMOTE_HOST:$REMOTE_WORKSPACE/DS-strategy/"
 
+echo "[4/4] Writing VPS runtime overrides..."
+ssh "$REMOTE_HOST" "cat > '$REMOTE_WORKSPACE/DS-strategy/current/SCHEDULER-RUNTIME.env' <<'EOF'
+EXOCORTEX_RUNTIME_TARGET=vps
+EXOCORTEX_DISABLE_LOCAL_DISPATCH=0
+EOF"
+
 echo "[4/4] Installing systemd runtime..."
 ssh "$REMOTE_HOST" "bash '$REMOTE_WORKSPACE/FMT-exocortex-template/setup/optional/setup-vps-agent-runtime.sh' --workspace '$REMOTE_WORKSPACE' --interval-minutes '$INTERVAL_MINUTES'"
 

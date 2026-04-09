@@ -4,7 +4,7 @@
 set -euo pipefail
 
 if [ "${1:-}" = "--env" ]; then
-    if [ -n "${WORKSPACE_DIR:-}" ] && [ -d "${WORKSPACE_DIR}/DS-strategy/.git" ]; then
+    if [ -n "${WORKSPACE_DIR:-}" ] && [ -d "${WORKSPACE_DIR}/DS-strategy" ] && [ -d "${WORKSPACE_DIR}/FMT-exocortex-template" ]; then
         workspace_dir="$WORKSPACE_DIR"
     else
         workspace_dir=""
@@ -15,7 +15,7 @@ if [ "${1:-}" = "--env" ]; then
             "/root/Github" \
             "/root"
         do
-            if [ -d "$candidate/DS-strategy/.git" ]; then
+            if [ -d "$candidate/DS-strategy" ] && [ -d "$candidate/FMT-exocortex-template" ]; then
                 workspace_dir="$candidate"
                 break
             fi
@@ -23,7 +23,7 @@ if [ "${1:-}" = "--env" ]; then
     fi
 
     if [ -z "$workspace_dir" ]; then
-        echo "Unable to resolve workspace root containing DS-strategy/.git" >&2
+        echo "Unable to resolve workspace root containing DS-strategy and FMT-exocortex-template" >&2
         exit 1
     fi
 

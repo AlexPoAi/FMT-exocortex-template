@@ -142,6 +142,15 @@ bash setup/optional/setup-vps-agent-runtime.sh --workspace "$HOME/Github" --inte
 bash setup/optional/deploy-vps-exocortex-runtime.sh --host root@72.56.4.61 --local-workspace "$HOME/Github" --remote-workspace /root/Github --interval-minutes 15
 ```
 
+Этот helper после sync принудительно пишет на VPS:
+
+```bash
+EXOCORTEX_RUNTIME_TARGET=vps
+EXOCORTEX_DISABLE_LOCAL_DISPATCH=0
+```
+
+Чтобы server-side dispatch не унаследовал локальный standby-флаг.
+
 ### Проверка
 
 ```bash
