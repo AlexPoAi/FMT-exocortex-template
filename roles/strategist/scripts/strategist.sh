@@ -94,6 +94,59 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+persist_provider_output() {
+    local provider="$1"
+    local scenario="$2"
+    local stdout_file="$3"
+    local message_file="${4:-}"
+    local out_dir base stdout_copy message_copy
+
+    out_dir="$LOG_DIR/raw/$DATE"
+    mkdir -p "$out_dir"
+
+    base="$(date '+%H%M%S')-${scenario}-${provider}"
+    stdout_copy="$out_dir/${base}.stdout.log"
+    cp "$stdout_file" "$stdout_copy" 2>/dev/null || true
+
+    if [ -n "$message_file" ] && [ -s "$message_file" ]; then
+        message_copy="$out_dir/${base}.message.txt"
+        cp "$message_file" "$message_copy" 2>/dev/null || true
+        printf '%s|%s\n' "$stdout_copy" "$message_copy"
+        return 0
+    fi
+
+    printf '%s|\n' "$stdout_copy"
+}
+
+log_provider_output_summary() {
+    local provider="$1"
+    local scenario="$2"
+    local stdout_file="$3"
+    local message_file="${4:-}"
+    local exit_code="${5:-0}"
+    local stored stdout_copy message_copy
+
+    stored="$(persist_provider_output "$provider" "$scenario" "$stdout_file" "$message_file")"
+    stdout_copy="${stored%%|*}"
+    message_copy="${stored#*|}"
+
+    log "Provider output archived: $stdout_copy"
+    [ -n "$message_copy" ] && log "Provider last message archived: $message_copy"
+
+    if [ "$exit_code" -ne 0 ]; then
+        log "Provider output tail for $provider/$scenario:"
+        tail -n 20 "$stdout_file" 2>/dev/null | while IFS= read -r line; do
+            log "  $line"
+        done
+        if [ -n "$message_file" ] && [ -s "$message_file" ]; then
+            log "Provider last message tail for $provider/$scenario:"
+            tail -n 10 "$message_file" 2>/dev/null | while IFS= read -r line; do
+                log "  $line"
+            done
+        fi
+    fi
+}
+
 refresh_recovery_brief() {
     if [ -x "$RECOVERY_BRIEF_SCRIPT" ]; then
         local brief_path
@@ -361,12 +414,7 @@ run_codex_provider() {
         "$prompt" \
         > "$tmp_out" 2>&1 || rc=$?
 
-    cat "$tmp_out" >> "$LOG_FILE"
-    if [ -s "$tmp_msg" ]; then
-        printf '\n' >> "$LOG_FILE"
-        cat "$tmp_msg" >> "$LOG_FILE"
-        printf '\n' >> "$LOG_FILE"
-    fi
+    log_provider_output_summary "codex" "$command_file" "$tmp_out" "$tmp_msg" "$rc"
 
     rm -f "$tmp_out" "$tmp_msg"
 
@@ -523,7 +571,7 @@ ${prompt}"
             --model "$attempt_model" \
             -p "$prompt" \
             > "$tmp_out" 2>&1 || rc=$?
-        cat "$tmp_out" >> "$LOG_FILE"
+        log_provider_output_summary "claude" "$command_file" "$tmp_out" "" "$rc"
 
         if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled' "$tmp_out" 2>/dev/null; then
             log "CRITICAL: Claude-compatible provider auth failed for scenario: $command_file"
