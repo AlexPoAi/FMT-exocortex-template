@@ -22,12 +22,16 @@ build_message() {
             candidates=$(grep -c '^## Кандидат' "$report" 2>/dev/null || echo "0")
             local accept
             accept=$(grep -c 'Вердикт.*accept' "$report" 2>/dev/null || echo "0")
+            local pack_candidates
+            pack_candidates=$(grep -c 'Вердикт.*pack_candidate' "$report" 2>/dev/null || echo "0")
 
             printf "<b>🔍 Knowledge Extractor: %s</b>\n\n" "$process"
             printf "📅 %s\n\n" "$DATE"
-            printf "📊 Кандидатов: %s, Accept: %s\n\n" "$candidates" "$accept"
+            printf "📊 Всего: %s | Accept: %s | В Pack: %s\n\n" "$candidates" "$accept" "$pack_candidates"
 
-            if [ "$candidates" -gt 0 ]; then
+            if [ "$pack_candidates" -gt 0 ]; then
+                printf "📦 Есть кандидаты в Pack — скажи агенту <b>«apply ke report»</b>"
+            elif [ "$candidates" -gt 0 ]; then
                 printf "Для применения: в Claude скажите «review extraction report»"
             else
                 printf "Inbox пуст."

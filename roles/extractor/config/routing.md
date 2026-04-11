@@ -18,6 +18,9 @@
 | VK Coffee управление, менеджер смены, смена, план смены, контроль качества, отчёт смены, стандарты, координация, калькуляция смены | PACK-management | MGMT | {{WORKSPACE_DIR}}/VK-offee/PACK-management/ |
 | VK Coffee персонал, найм, обучение, адаптация, должностная инструкция, график работы, онбординг, оценка персонала, карьерное развитие, HR | PACK-hr | HR | {{WORKSPACE_DIR}}/VK-offee/PACK-hr/ |
 | IWE, культура работы, протоколы работы, навыки, различения, методы, экзокортекс, capture, стоп-кран, рабочая дисциплина | PACK-iwe-culture | IWE | {{WORKSPACE_DIR}}/PACK-iwe-culture/ |
+| VK-offee парк, архитектура, вывеска, дизайн, архитектурный проект, благоустройство, смета, подрядчик, ремонт, строительство, объект | PACK-park-development | PARK | {{WORKSPACE_DIR}}/VK-offee/PACK-park-development/ |
+| VK-offee кафе-операции, операционный учёт, аналитика, Saby, выручка, оборот, P&L, меню, маркетинг, продукт, привлекательность | PACK-cafe-operations | CO | {{WORKSPACE_DIR}}/VK-offee/PACK-cafe-operations/ |
+| Точка Самокиша, объект на Самокиша, отделка точки, монтаж, оборудование конкретной точки, POINT-samokisha | POINT-samokisha | POINT | {{WORKSPACE_DIR}}/VK-offee/POINT-samokisha/ |
 
 ## 2. Директории по типу знания
 
@@ -111,4 +114,4 @@ DS-кандидаты **не требуют** frontmatter с trust/epistemic_sta
 
 ---
 
-*Последнее обновление: 2026-02-28*
+*Последнее обновление: 2026-04-11*
