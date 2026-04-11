@@ -1,6 +1,6 @@
 # apply-ke-report — Применить KE-отчёт: сохранить в Pack
 
-> **Триггер:** пользователь говорит «apply ke report», «сохрани в Pack», «применяй отчёт», «apply extraction report»
+> **Триггер:** пользователь говорит «применяй», «применяй отчёт», «сохрани в Pack», «apply ke report», «apply extraction report»
 > **Роль:** Knowledge Engineer (KE, R2)
 > **Контекст:** после inbox-check создан extraction-report с pack_candidates — нужно интерактивно сохранить их в Pack
 
