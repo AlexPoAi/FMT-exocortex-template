@@ -178,7 +178,7 @@ task_missing_is_expected() {
             [ "$HOUR" -lt 22 ]
             ;;
         strategist-week-review)
-            [ "$DOW" -ne 1 ]
+            return 1
             ;;
         synchronizer-daily-report)
             [ "$HOUR" -lt 6 ] && [ ! -f "$STATE_DIR/strategist-morning-$DATE" ]
