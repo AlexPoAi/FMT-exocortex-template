@@ -590,6 +590,8 @@ ${prompt}"
 
     if [ "$command_file" = "week-review" ] && [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
         AI_CLI_PROVIDER_PRIMARY="claude"
+        AI_CLI_PRIMARY_MODEL="claude-haiku-4-5"
+        AI_CLI_FALLBACK_MODEL="claude-sonnet-4-6"
         log "Week-review override: prefer Claude-compatible primary path for stability"
     fi
 
