@@ -25,12 +25,14 @@ STATE_DIR="$HOME/.local/state/exocortex"
 STATUS_DIR="$STATE_DIR/status"
 CLAUDE_PATH="${CLAUDE_PATH:-$HOME/.local/bin/claude}"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude-compatible CLI
-AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
-AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
+AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-sonnet-4-6}}"
+AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-haiku-4-5}"
 AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 CODEX_TIMEOUT="${CODEX_TIMEOUT:-1200}"
+CODEX_MODEL_WEEK_REVIEW="${CODEX_MODEL_WEEK_REVIEW:-gpt-5.4-mini}"
+CODEX_TIMEOUT_WEEK_REVIEW="${CODEX_TIMEOUT_WEEK_REVIEW:-600}"
 RUNTIME_ARBITER_PATH="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/runtime-arbiter.sh"
 GITHUB_USER="$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|' | sed 's|https://github.com/||' | cut -d/ -f1 | head -1)"
 [ -n "$GITHUB_USER" ] || GITHUB_USER="AlexPoAi"
@@ -395,22 +397,82 @@ run_codex_provider() {
     local command_file="$1"
     local prompt="$2"
     local reason="${3:-claude_unavailable}"
-    local tmp_out tmp_msg rc=0
+    local tmp_out tmp_msg rc=0 codex_model codex_timeout
 
     if ! has_codex_fallback; then
         return 1
     fi
 
+    codex_model="$CODEX_MODEL"
+    codex_timeout="$CODEX_TIMEOUT"
+
+    case "$command_file" in
+        week-review)
+            codex_model="$CODEX_MODEL_WEEK_REVIEW"
+            codex_timeout="$CODEX_TIMEOUT_WEEK_REVIEW"
+            prompt=$(cat <<EOF
+[Системный контекст] Сегодня: ${DATE}. День недели №${DAY_OF_WEEK} (1=Пн..7=Вс). ЯЗЫК: отвечай ТОЛЬКО на русском.
+
+Выполни УПРОЩЁННЫЙ fallback-сценарий week-review для роли Стратег.
+
+Это не полный weekly workflow. Твоя задача только одна:
+- обновить текущий WeekPlan в ${WORKSPACE}/current/
+- записать краткую секцию итогов прошлой недели как вход для следующего session-prep
+
+Жёсткие ограничения:
+1. НЕ создавать пост для клуба
+2. НЕ менять DS-Knowledge-Index
+3. НЕ выполнять week-close / rotation MEMORY
+4. НЕ трогать другие репозитории кроме чтения git log
+5. НЕ делать лишних больших текстов
+
+Что нужно сделать:
+1. Найди текущий WeekPlan W*.md в ${WORKSPACE}/current/
+2. Считай его source-of-truth файлом недели
+3. По git log в /Users/alexander/Github/* собери краткие итоги прошлой недели
+4. Вставь или обнови секцию вида:
+
+## Итоги W15
+
+### Метрики
+- РП: ...
+- Коммитов: ...
+- Активных дней: ...
+
+### По репозиториям
+Короткая таблица 3 колонки: репо / коммиты / главное
+
+### РП
+Короткая таблица: id / статус / комментарий
+
+### Инсайты
+- 2-4 пункта
+
+### Carry-over
+- 2-5 пунктов
+
+### Фокус следующей недели
+- 2-4 пункта
+
+Важно:
+- если данных не хватает, пиши честно и кратко
+- результат должен быть компактным
+- после обновления WeekPlan закоммить изменения только в DS-strategy
+EOF
+)
+            ;;
+    esac
+
     tmp_out=$(mktemp)
     tmp_msg=$(mktemp)
 
-    log "WARN: falling back to Codex for $command_file (reason=$reason, model=$CODEX_MODEL)"
-    timeout "$CODEX_TIMEOUT" "$CODEX_PATH" exec \
+    log "WARN: falling back to Codex for $command_file (reason=$reason, model=$codex_model, timeout=${codex_timeout}s)"
+    timeout "$codex_timeout" "$CODEX_PATH" exec \
         --skip-git-repo-check \
         -C "$WORKSPACE" \
         --output-last-message "$tmp_msg" \
         --sandbox danger-full-access \
-        -m "$CODEX_MODEL" \
+        -m "$codex_model" \
         "$prompt" \
         > "$tmp_out" 2>&1 || rc=$?
 
@@ -420,20 +482,20 @@ run_codex_provider() {
 
     if [ "$rc" -eq 0 ]; then
         log "Completed scenario: $command_file"
-        log "Scenario result: $command_file status=success exit_code=0 provider=codex model=$CODEX_MODEL"
+        log "Scenario result: $command_file status=success exit_code=0 provider=codex model=$codex_model"
         write_status_artifact "$SCENARIO_STATUS_TASK" "success" "0" "completed successfully via codex" "verified" "scenario completed via codex provider" "" "true"
         return 0
     fi
 
     if [ "$rc" -eq 124 ]; then
-        log "ERROR: Codex provider timed out after ${CODEX_TIMEOUT}s for scenario: $command_file"
-        log "Scenario result: $command_file status=timeout exit_code=$rc provider=codex model=$CODEX_MODEL"
+        log "ERROR: Codex provider timed out after ${codex_timeout}s for scenario: $command_file"
+        log "Scenario result: $command_file status=timeout exit_code=$rc provider=codex model=$codex_model"
         write_status_artifact "$SCENARIO_STATUS_TASK" "timeout" "$rc" "codex provider timed out" "reported" "codex provider timeout" "codex timeout for $command_file" "false"
         return 124
     fi
 
     log "ERROR: Codex provider exited with code $rc for scenario: $command_file"
-    log "Scenario result: $command_file status=failed exit_code=$rc provider=codex model=$CODEX_MODEL"
+    log "Scenario result: $command_file status=failed exit_code=$rc provider=codex model=$codex_model"
     write_status_artifact "$SCENARIO_STATUS_TASK" "failed" "$rc" "codex provider failed" "reported" "codex provider returned non-zero exit" "codex provider failed for $command_file" "false"
     return "$rc"
 }
@@ -525,6 +587,11 @@ ${prompt}"
     cd "$WORKSPACE"
 
     AI_CLI_PROVIDER_PRIMARY="$(resolve_provider_primary_choice)"
+
+    if [ "$command_file" = "week-review" ] && [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
+        AI_CLI_PROVIDER_PRIMARY="claude"
+        log "Week-review override: prefer Claude-compatible primary path for stability"
+    fi
 
     if uses_codex_as_primary; then
         if run_codex_provider "$command_file" "$prompt" "primary_provider"; then
