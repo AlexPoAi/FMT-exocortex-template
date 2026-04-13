@@ -175,7 +175,9 @@ resolve_provider_primary_choice() {
         fi
     fi
 
-    if resolve_codex_path >/dev/null 2>&1; then
+    if resolve_claude_path >/dev/null 2>&1; then
+        printf '%s\n' "claude"
+    elif resolve_codex_path >/dev/null 2>&1; then
         printf '%s\n' "codex"
     else
         printf '%s\n' "claude"

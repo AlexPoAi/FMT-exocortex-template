@@ -25,8 +25,8 @@ STATE_DIR="$HOME/.local/state/exocortex"
 STATUS_DIR="$STATE_DIR/status"
 CLAUDE_PATH="${CLAUDE_PATH:-$HOME/.local/bin/claude}"
 CLAUDE_TIMEOUT=1800  # 30 мин — защита от зависания Claude-compatible CLI
-AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-sonnet-4-6}}"
-AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-haiku-4-5}"
+AI_CLI_PRIMARY_MODEL="${AI_CLI_PRIMARY_MODEL:-${AI_CLI_MODEL:-claude-haiku-4-5}}"
+AI_CLI_FALLBACK_MODEL="${AI_CLI_FALLBACK_MODEL:-claude-sonnet-4-6}"
 AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
@@ -304,7 +304,9 @@ resolve_provider_primary_choice() {
         fi
     fi
 
-    if [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]; then
+    if [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
+        printf '%s\n' "claude"
+    elif [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]; then
         printf '%s\n' "codex"
     else
         printf '%s\n' "claude"
