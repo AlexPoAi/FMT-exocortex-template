@@ -31,6 +31,7 @@ portable_date_offset() {
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SYNC_DIR="$(dirname "$SCRIPT_DIR")"
 STATE_DIR="$HOME/.local/state/exocortex"
+STATUS_DIR="$STATE_DIR/status"
 LOG_DIR="$HOME/logs/synchronizer"
 LOG_FILE="$LOG_DIR/scheduler-$(date +%Y-%m-%d).log"
 RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
@@ -95,6 +96,24 @@ mark_done() {
 
 mark_done_week() {
     echo "$DATE $(date '+%H:%M:%S')" > "$STATE_DIR/$1-W$WEEK"
+}
+
+weekly_status_verified() {
+    local task="$1"
+    local status_file="$STATUS_DIR/${task}.status"
+    local task_name="" status="" evidence=""
+
+    [ -f "$status_file" ] || return 1
+
+    # shellcheck disable=SC1090
+    source "$status_file"
+    task_name="${TASK_NAME:-}"
+    status="${STATUS:-}"
+    evidence="${EVIDENCE_STATUS:-}"
+
+    [ "$task_name" = "$task" ] || return 1
+    [ "$status" = "success" ] || return 1
+    [ "$evidence" = "verified" ] || return 1
 }
 
 last_run_seconds_ago() {
@@ -174,8 +193,10 @@ dispatch() {
         "$STRATEGIST_SH" week-review >> "$LOG_FILE" 2>&1
         _rc=$?
         set -e
-        if [ "$_rc" -eq 0 ]; then
+        if [ "$_rc" -eq 0 ] && weekly_status_verified "strategist-week-review"; then
             mark_done_week "strategist-week-review"
+        elif [ "$_rc" -eq 0 ]; then
+            log "WARN: strategist week-review exited 0 but status artifact is not verified-success; weekly marker not set"
         elif [ "$_rc" -eq 2 ]; then
             log "INFO: strategist week-review — уже выполняется (lock), ждём завершения"
         else

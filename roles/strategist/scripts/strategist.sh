@@ -85,6 +85,8 @@ mkdir -p "$STATUS_DIR"
 # Определяем день недели и тип сценария
 DAY_OF_WEEK=$(date +%u)  # 1=Mon, 7=Sun
 DATE=$(date +%Y-%m-%d)
+ISO_WEEK=$(date +%V)
+ISO_YEAR=$(date +%G)
 
 # Лог файл
 LOG_FILE="$LOG_DIR/$DATE.log"
@@ -744,6 +746,31 @@ already_ran_today() {
     [ -f "$LOG_FILE" ] && grep -q "Completed scenario: $scenario" "$LOG_FILE"
 }
 
+already_ran_this_week() {
+    local scenario="$1"
+    local status_file task status end_ts end_date end_week end_year
+
+    task="$(status_task_for_scenario "$scenario")"
+    status_file="$STATUS_DIR/${task}.status"
+
+    if [ -n "$task" ] && [ -f "$status_file" ]; then
+        # shellcheck disable=SC1090
+        source "$status_file"
+        status="${STATUS:-}"
+        end_ts="${END_TS:-}"
+        end_date="${end_ts%% *}"
+        if [ "$status" = "success" ] && [ -n "$end_date" ]; then
+            end_week="$(date -j -f '%Y-%m-%d' "$end_date" '+%V' 2>/dev/null || true)"
+            end_year="$(date -j -f '%Y-%m-%d' "$end_date" '+%G' 2>/dev/null || true)"
+            if [ "$end_week" = "$ISO_WEEK" ] && [ "$end_year" = "$ISO_YEAR" ]; then
+                return 0
+            fi
+        fi
+    fi
+
+    return 1
+}
+
 # File-based lock to prevent concurrent execution (RunAtLoad + CalendarInterval race)
 LOCK_DIR="$LOG_DIR/locks"
 mkdir -p "$LOCK_DIR"
@@ -853,8 +880,8 @@ case "$1" in
         ;;
     "week-review")
         acquire_lock "week-review"
-        if already_ran_today "week-review"; then
-            log "SKIP: week-review already completed today"
+        if already_ran_this_week "week-review"; then
+            log "SKIP: week-review already completed in current week-window"
             write_status_artifact "$(status_task_for_scenario "week-review")" "success" "0" "already completed earlier this week-window" "verified" "same-week completion detected before rerun" "" "true"
             exit 0
         fi
