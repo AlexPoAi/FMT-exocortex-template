@@ -68,8 +68,8 @@ DS-strategy/
      - `→ keep in recovery` — данных пока недостаточно, но элемент не потерян
   6. Включи этот блок в WeekPlan (секция повестки)
 - **WP Context Files** (`WP-*.md`): обработай отдельно:
-  - Проверь: РП ещё актуален? Сверь `status` в фронтматтере WP-файла с MEMORY.md
-  - Если фронтматтер и MEMORY.md расходятся — **доверяй MEMORY.md** (source-of-truth статуса)
+  - Проверь: РП ещё актуален? Сверь `status` в фронтматтере WP-файла с `memory/MEMORY.md`
+  - Если фронтматтер и `memory/MEMORY.md` расходятся — **доверяй `memory/MEMORY.md`** (source-of-truth статуса)
   - Если РП done/merged/drop → будет заархивирован на шаге 8.5 (Session-Prep — единственный владелец этой обязанности)
   - Если РП active — учесть «Текущее состояние» при формировании WeekPlan (блокеры, следующие шаги)
 - Сформируй блок повестки с рекомендациями по каждому элементу inbox
@@ -124,9 +124,9 @@ DS-strategy/
 3. ~~WeekReport~~ — отдельный файл больше не создаётся (deprecated). Итоги — секция в WeekPlan.
 4. Перемести предыдущий `SchedulerReport *.md` из `current/` в `archive/scheduler-reports/` (если есть и не текущий)
 5. **Архивация WP context files (safety net — Close уже архивирует done-файлы):**
-   - Для каждого `inbox/WP-*.md` сверь статус с MEMORY.md (source-of-truth)
+   - Для каждого `inbox/WP-*.md` сверь статус с `memory/MEMORY.md` (source-of-truth)
    - `status: done` / `merged` / `drop` всё ещё в inbox? → переместить в `archive/wp-contexts/` (Close пропустил)
-   - Если фронтматтер WP-файла не совпадает с MEMORY.md → обновить фронтматтер перед перемещением
+   - Если фронтматтер WP-файла не совпадает с `memory/MEMORY.md` → обновить фронтматтер перед перемещением
 6. **Полная очистка inbox/ (еженедельно, единственный владелец — Session-Prep):**
    - `extraction-reports/` — отчёты старше 7 дней → удали (информация уже в Pack)
    - `captures.md` — записи с `[processed ...]` старше 14 дней → **архивируй** в `archive/captures/captures-{period}.md` (НЕ удалять — это аудитный след записи в Pack). Записи с `[rejected ...]` старше 14 дней → архивируй туда же.
@@ -247,5 +247,5 @@ agent: Стратег
    - Обновить статусы РП (done/in_progress/pending)
    - Добавить новые РП
    - Убрать done/archived
-3. **MEMORY.md** — синхронизировать таблицу «РП текущей недели»
+3. **`memory/MEMORY.md`** — синхронизировать таблицу «РП текущей недели»
 4. Закоммитить все изменения

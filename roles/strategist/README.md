@@ -21,8 +21,8 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
     scripts/                              Strategy.md
       strategist.sh                       Dissatisfactions.md
   memory/                              inbox/
-    protocol-open.md  (← day-plan)       WP-{N}-*.md (контексты задач)
-    protocol-close.md (← day-close)    archive/
+    memory/protocol-open.md   (← day-plan)      WP-{N}-*.md (контексты задач)
+    memory/protocol-close.md  (← day-close)     archive/
 ```
 
 > **Примечание:** Промпты `session-prep`, `strategy-session`, `day-plan`, `week-review`, `day-close`, `note-review` вынесены из шаблона. `day-plan` и `day-close` мигрировали в протоколы `memory/protocol-open.md` и `memory/protocol-close.md`. Остальные создаются пользователем в его DS-репо при установке.
@@ -30,7 +30,7 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 **Потоки данных:**
 - Промпты (PLATFORM) → `prompts/` (3 базовых) + `memory/protocol-*.md`
 - Результаты (PERSONAL) → DS-strategy/ (отдельный приватный репо, не затрагивается обновлениями)
-- Входные данные: MEMORY.md, MAPSTRATEGIC.md (из каждого репо), WakaTime
+- Входные данные: `memory/MEMORY.md`, MAPSTRATEGIC.md (из каждого репо), WakaTime
 
 ---
 
@@ -91,7 +91,7 @@ bash ../synchronizer/install.sh  # Канонически установить s
 ./scripts/strategist.sh evening           # вечерний итог
 ./scripts/strategist.sh week-review       # итоги недели
 ./scripts/strategist.sh strategy-session  # сессия стратегирования (интерактив)
-./scripts/strategist.sh day-close         # закрытие дня
+./scripts/strategist.sh day-close         # не поддержан в headless strategist; использовать canonical `memory/protocol-close.md`
 ./scripts/strategist.sh note-review       # обзор заметок
 ```
 

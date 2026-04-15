@@ -20,8 +20,8 @@
 
 | Масштаб | Открытие | Работа | Закрытие |
 |---------|----------|--------|----------|
-| **Сессия** | `protocol-open.md § Сессия` (любое задание, «открывай сессию») | `protocol-work.md` | `/run-protocol close` |
-| **День** | `protocol-open.md § Сессия` + truthful opening-state («открывай», «открывай день») | Между Day Open и Day Close | `/run-protocol day-close` |
+| **Сессия** | `memory/protocol-open.md` (любое задание, «открывай сессию») | `memory/protocol-work.md` | `/run-protocol close` |
+| **День** | `memory/protocol-open.md` + truthful opening-state («открывай», «открывай день») | Между Day Open и Day Close | `/run-protocol day-close` |
 | **Неделя** | — | — | `/run-protocol week-close` |
 
 ### Блокирующие правила
