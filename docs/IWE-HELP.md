@@ -121,7 +121,7 @@ bash ~/IWE/FMT-exocortex-template/roles/strategist/scripts/strategist.sh day-pla
 | Правила | `CLAUDE.md` | Всегда (авто-контекст) |
 | Справочная | `memory/*.md` | По запросу |
 
-MEMORY.md — личные (текущие задачи, РП недели). Редактируется каждую сессию.
+`memory/MEMORY.md` — личные (текущие задачи, РП недели). Редактируется каждую сессию.
 `DS-strategy/docs/WP-REGISTRY.md` — полный реестр всех РП от последнего к первому (DP.WP.015). Обновляется на Close при изменении статуса.
 Остальные memory/*.md — платформенные. Обновляются из upstream через `update.sh`.
 
@@ -135,8 +135,8 @@ bash update.sh          # обновить
 bash update.sh --check  # проверить без применения
 ```
 
-Обновляются: CLAUDE.md, memory/ (кроме MEMORY.md), промпты ролей, скрипты.
-НЕ трогаются: MEMORY.md, DS-strategy/, routing.md, личные настройки.
+Обновляются: CLAUDE.md, memory/ (кроме `memory/MEMORY.md`), промпты ролей, скрипты.
+НЕ трогаются: `memory/MEMORY.md`, DS-strategy/, routing.md, личные настройки.
 
 ---
 
@@ -156,7 +156,7 @@ bash update.sh --check  # проверить без применения
 
 **Стратег не формирует план** — проверь `launchctl list | grep strategist` (macOS). Если нет — `bash roles/strategist/install.sh`.
 
-**MEMORY.md не загружается** — проверь путь: `~/.claude/projects/-Users-<username>-IWE/memory/MEMORY.md`. Имя директории = путь к workspace через дефисы.
+**`memory/MEMORY.md` не загружается** — проверь путь: `~/.claude/projects/-Users-<username>-IWE/memory/MEMORY.md`. Имя директории = путь к workspace через дефисы.
 
 **DS-strategy не создан** — вручную: `mkdir -p ~/IWE/DS-strategy/{current,inbox,docs,archive} && cd ~/IWE/DS-strategy && git init`.
 
@@ -177,7 +177,7 @@ export TELEGRAM_CHAT_ID="your-id"
 | Термин | Значение |
 |--------|---------|
 | IWE | Intellectual Work Environment — интеллектуальная рабочая среда |
-| Экзокортекс | Подсистема памяти IWE (CLAUDE.md + MEMORY.md + memory/) |
+| Экзокортекс | Подсистема памяти IWE (`CLAUDE.md` + `memory/MEMORY.md` + `memory/`) |
 | Pack | Предметная база знаний (source-of-truth для домена) |
 | DS-strategy | Личный стратегический хаб (приватный репо) |
 | WP Gate | Проверка: есть ли задача в плане недели? |
