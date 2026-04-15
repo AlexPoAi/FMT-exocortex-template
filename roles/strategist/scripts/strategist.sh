@@ -42,7 +42,35 @@ if [ ! -x "$CLAUDE_PATH" ]; then
     CLAUDE_PATH="$(command -v claude 2>/dev/null || true)"
 fi
 
-CODEX_PATH="${CODEX_PATH:-$(command -v codex 2>/dev/null || true)}"
+resolve_codex_path() {
+    local candidate
+
+    if [ -n "${CODEX_PATH:-}" ] && [ -x "${CODEX_PATH:-}" ]; then
+        printf '%s\n' "$CODEX_PATH"
+        return 0
+    fi
+
+    candidate=$(command -v codex 2>/dev/null || true)
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    for candidate in \
+        "/Applications/Codex.app/Contents/Resources/codex" \
+        "/usr/local/bin/codex" \
+        "/opt/homebrew/bin/codex" \
+        "$HOME/.local/bin/codex"; do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+CODEX_PATH="$(resolve_codex_path 2>/dev/null || true)"
 
 if [ -n "$CLAUDE_PATH" ] && [ ! -x "$CLAUDE_PATH" ]; then
     CLAUDE_PATH=""
@@ -304,10 +332,10 @@ resolve_provider_primary_choice() {
         fi
     fi
 
-    if [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
-        printf '%s\n' "claude"
-    elif [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]; then
+    if [ -n "$CODEX_PATH" ] && [ -x "$CODEX_PATH" ]; then
         printf '%s\n' "codex"
+    elif [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
+        printf '%s\n' "claude"
     else
         printf '%s\n' "claude"
     fi
@@ -510,9 +538,6 @@ resolve_command_path() {
     case "$command_file" in
         day-close)
             printf '%s\n' "$FMT_EXOCORTEX_DIR/memory/protocol-close.md"
-            ;;
-        day-plan)
-            printf '%s\n' "$FMT_EXOCORTEX_DIR/memory/protocol-open.md"
             ;;
         *)
             printf '%s\n' "$PROMPTS_DIR/$command_file.md"
