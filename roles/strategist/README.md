@@ -55,7 +55,7 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 | 4 | Итоги недели | DS: `week-review.md` | Пн 00:00 | Создаётся пользователем |
 | 5 | Добавить РП | `prompts/add-wp.md` | Вручную | В шаблоне |
 | 6 | Проверить задачу (WP Gate) | `prompts/check-plan.md` | WP Gate | В шаблоне |
-| 7 | Закрытие дня | `memory/protocol-close.md` | Вручную | В шаблоне |
+| 7 | Закрытие дня | `memory/protocol-close.md` (canonical route, не через `strategist.sh`) | Вручную | В шаблоне |
 | 8 | Обзор заметок | DS: `note-review.md` | По необходимости | Создаётся пользователем |
 
 ## Acceptance
