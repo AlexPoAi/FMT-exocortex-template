@@ -340,7 +340,23 @@ run_claude() {
     fi
 
     local prompt
-    prompt=$(cat "$command_path")
+    if [ "$command_file" = "inbox-check" ]; then
+        # Keep the runtime prompt short to avoid provider timeouts on scheduled runs.
+        prompt="HEADLESS AUTOMATION MODE.
+Run inbox-check end-to-end now.
+Do not ask questions.
+Do not print opening screen, ritual, or menus.
+Do not wait for user input.
+Do not run git commit or git push commands.
+Read and follow the full algorithm from: $command_path
+Use workspace root: $WORKSPACE
+Create/update required artifacts now.
+If there are no pending captures, finish with: NO_PENDING_CAPTURES"
+    else
+        prompt=$(cat "$command_path")
+        # Resolve workspace placeholder for deterministic execution.
+        prompt="${prompt//'{{WORKSPACE_DIR}}'/$WORKSPACE}"
+    fi
 
     if [ -n "$extra_args" ]; then
         prompt="$prompt
@@ -461,6 +477,11 @@ $extra_args"
         fi
 
         rm -f "$tmp_out"
+        if [ "$command_file" = "inbox-check" ] && has_codex_fallback; then
+            log "WARN: claude failed for inbox-check (exit=$exit_code) — trying Codex fallback"
+            run_codex_provider "$command_file" "$prompt" "claude_exit_${exit_code}"
+            return $?
+        fi
         log "ERROR: claude exited with code $exit_code for $command_file (model=$attempt_model)"
         notify "⚠️ Экзокортекс: ошибка агента" "extractor/$command_file завершился с кодом $exit_code"
         return $exit_code
