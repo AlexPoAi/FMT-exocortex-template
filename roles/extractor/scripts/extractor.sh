@@ -28,7 +28,14 @@ AI_CLI_PROVIDER_PRIMARY="${AI_CLI_PROVIDER_PRIMARY:-auto}"
 AI_CLI_PROVIDER_FALLBACK="${AI_CLI_PROVIDER_FALLBACK:-codex}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 CODEX_TIMEOUT="${CODEX_TIMEOUT:-1200}"
-AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash}"
+AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:-}"
+if [ -z "$AI_CLI_EXTRA_FLAGS" ]; then
+    if [ "$(id -u)" -eq 0 ]; then
+        AI_CLI_EXTRA_FLAGS="--allowedTools Read,Write,Edit,Glob,Grep,Bash"
+    else
+        AI_CLI_EXTRA_FLAGS="--dangerously-skip-permissions --allowedTools Read,Write,Edit,Glob,Grep,Bash"
+    fi
+fi
 RUNTIME_ARBITER_PATH="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/runtime-arbiter.sh"
 
 mkdir -p "$LOG_DIR"

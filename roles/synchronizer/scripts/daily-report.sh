@@ -1022,6 +1022,13 @@ else
     log "Report written: $REPORT_FILE"
     write_status_artifacts
 
+    if [ ! -d "$COMMIT_DIR/.git" ]; then
+        log "WARN: commit dir is not a git repository ($COMMIT_DIR); skip commit/push"
+        commit_strategy_artifacts || true
+        log "=== Daily Report Completed ==="
+        exit 0
+    fi
+
     cd "$COMMIT_DIR"
     git pull --rebase --quiet 2>/dev/null || log "INFO: pull --rebase skipped (offline or no changes)"
     git reset --quiet 2>/dev/null || true

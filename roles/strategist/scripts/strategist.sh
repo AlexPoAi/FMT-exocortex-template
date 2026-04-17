@@ -664,11 +664,19 @@ ${prompt}"
         tmp_out=$(mktemp)
 
         log "Model attempt $attempt_index/$total_attempts for $command_file: $attempt_model"
-        timeout "$CLAUDE_TIMEOUT" "$CLAUDE_PATH" --dangerously-skip-permissions \
-            --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
-            --model "$attempt_model" \
-            -p "$prompt" \
-            > "$tmp_out" 2>&1 || rc=$?
+        if [ "$(id -u)" -eq 0 ]; then
+            timeout "$CLAUDE_TIMEOUT" "$CLAUDE_PATH" \
+                --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
+                --model "$attempt_model" \
+                -p "$prompt" \
+                > "$tmp_out" 2>&1 || rc=$?
+        else
+            timeout "$CLAUDE_TIMEOUT" "$CLAUDE_PATH" --dangerously-skip-permissions \
+                --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
+                --model "$attempt_model" \
+                -p "$prompt" \
+                > "$tmp_out" 2>&1 || rc=$?
+        fi
         log_provider_output_summary "claude" "$command_file" "$tmp_out" "" "$rc"
 
         if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled' "$tmp_out" 2>/dev/null; then
