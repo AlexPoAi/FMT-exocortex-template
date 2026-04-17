@@ -74,7 +74,6 @@ resolve_codex_path() {
     for candidate in \
         "/Applications/Codex.app/Contents/Resources/codex" \
         "/usr/local/bin/codex" \
-        "/opt/homebrew/bin/codex" \
         "$HOME/.local/bin/codex"; do
         if [ -x "$candidate" ]; then
             printf '%s\n' "$candidate"

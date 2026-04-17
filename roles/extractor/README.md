@@ -25,7 +25,7 @@
 
 ## Acceptance
 
-- [ACCEPTANCE.md](/Users/alexander/Github/FMT-exocortex-template/roles/extractor/ACCEPTANCE.md) — truthful runbook для сценариев `pass / partial / broken`
+- [ACCEPTANCE.md](./ACCEPTANCE.md) — truthful runbook для сценариев `pass / partial / broken`
 
 Короткая семантика:
 - `inbox-check`, `on-demand`, `session-close` — confirmed operational scope

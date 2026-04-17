@@ -35,15 +35,13 @@
 
 ## Навигация (Слой 3)
 
-| Тема | Файл |
-|------|------|
-| Различения (жёсткие пары) | `memory/hard-distinctions.md` |
-| FPF (навигация, принципы) | `memory/fpf-reference.md` |
-| Правила по типам репо | `memory/repo-type-rules.md` |
-| Чеклисты | `memory/checklists.md` |
-| **SOTA-практики** | `memory/sota-reference.md` |
-| Протокол открытия | `memory/protocol-open.md` |
-| Протокол работы | `memory/protocol-work.md` |
-| Протокол закрытия | `memory/protocol-close.md` |
-| **Системно-специфичное** | **→ repo/CLAUDE.md** |
-| Стратег | `roles/strategist/README.md` (в шаблоне) |
+- Различения (жёсткие пары): `memory/hard-distinctions.md`
+- FPF (навигация, принципы): `memory/fpf-reference.md`
+- Правила по типам репо: `memory/repo-type-rules.md`
+- Чеклисты: `memory/checklists.md`
+- SOTA-практики: `memory/sota-reference.md`
+- Протокол открытия: `memory/protocol-open.md`
+- Протокол работы: `memory/protocol-work.md`
+- Протокол закрытия: `memory/protocol-close.md`
+- Системно-специфичное: `repo/CLAUDE.md`
+- Стратег: `roles/strategist/README.md` (в шаблоне)

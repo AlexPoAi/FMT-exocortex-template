@@ -59,7 +59,6 @@ resolve_codex_path() {
     for candidate in \
         "/Applications/Codex.app/Contents/Resources/codex" \
         "/usr/local/bin/codex" \
-        "/opt/homebrew/bin/codex" \
         "$HOME/.local/bin/codex"; do
         if [ -x "$candidate" ]; then
             printf '%s\n' "$candidate"
@@ -461,7 +460,7 @@ run_codex_provider() {
 Что нужно сделать:
 1. Найди текущий WeekPlan W*.md в ${WORKSPACE}/current/
 2. Считай его source-of-truth файлом недели
-3. По git log в /Users/alexander/Github/* собери краткие итоги прошлой недели
+3. По git log в ${WORKSPACE_ROOT}/* собери краткие итоги прошлой недели
 4. Вставь или обнови секцию вида:
 
 ## Итоги W15
@@ -550,10 +549,16 @@ resolve_knowledge_index_dir() {
 
     for candidate in \
         "$WORKSPACE_ROOT/DS-Knowledge-Index" \
-        "$WORKSPACE_ROOT/DS-Knowledge-Index-Tseren" \
-        "$HOME/IWE/DS-Knowledge-Index" \
-        "$HOME/IWE/DS-Knowledge-Index-Tseren"
+        "$HOME/IWE/DS-Knowledge-Index"
     do
+        if [ -d "$candidate/.git" ] || [ -d "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    for candidate in "$WORKSPACE_ROOT"/DS-Knowledge-Index* "$HOME/IWE"/DS-Knowledge-Index*; do
+        [ -e "$candidate" ] || continue
         if [ -d "$candidate/.git" ] || [ -d "$candidate" ]; then
             printf '%s\n' "$candidate"
             return 0
@@ -570,7 +575,7 @@ run_claude() {
     local knowledge_index_repo
     command_path=$(resolve_command_path "$command_file")
     knowledge_index_dir=$(resolve_knowledge_index_dir || true)
-    [ -n "$knowledge_index_dir" ] || knowledge_index_dir="$WORKSPACE_ROOT/DS-Knowledge-Index-Tseren"
+    [ -n "$knowledge_index_dir" ] || knowledge_index_dir="$WORKSPACE_ROOT/DS-Knowledge-Index"
     knowledge_index_repo="$(basename "$knowledge_index_dir")"
 
     if [ ! -f "$command_path" ]; then

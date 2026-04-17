@@ -60,7 +60,7 @@ FMT-exocortex-template/              DS-strategy/ (отдельный репо)
 
 ## Acceptance
 
-- [ACCEPTANCE.md](/Users/alexander/Github/FMT-exocortex-template/roles/strategist/ACCEPTANCE.md) — truthful runbook для сценариев `pass / partial / broken`
+- [ACCEPTANCE.md](./ACCEPTANCE.md) — truthful runbook для сценариев `pass / partial / broken`
 
 Короткая семантика:
 - `WP Gate`, `morning/day-plan`, `week-review`, `note-review` — confirmed operational scope
