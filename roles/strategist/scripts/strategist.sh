@@ -422,7 +422,7 @@ count_non_bold_content_lines() {
 claude_reauth_hint() {
     local cli_name="${CLAUDE_PATH##*/}"
     [ -n "$cli_name" ] || cli_name="claude"
-    printf '%s\n' "$cli_name /login"
+    printf '%s\n' "$cli_name auth login"
 }
 
 run_codex_provider() {

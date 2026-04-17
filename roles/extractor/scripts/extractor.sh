@@ -197,16 +197,6 @@ preflight_check() {
         return 12
     fi
 
-    if [ ! -f "$HOME/.config/aist/anthropic_auth_helper.sh" ]; then
-        log "ERROR: anthropic_auth_helper.sh not found"
-        return 13
-    fi
-
-    if [ ! -x "$HOME/.config/aist/anthropic_auth_helper.sh" ]; then
-        log "ERROR: anthropic_auth_helper.sh is not executable"
-        return 14
-    fi
-
     if [ ! -f "$ENV_FILE" ]; then
         log "ERROR: env file not found: $ENV_FILE"
         return 15
@@ -214,9 +204,14 @@ preflight_check() {
 
     load_env
 
-    if ! "$HOME/.config/aist/anthropic_auth_helper.sh" >/dev/null 2>&1; then
-        log "ERROR: auth helper failed"
+    if ! "$resolved_cli" auth status >/tmp/extractor-auth-status.log 2>&1; then
+        log "ERROR: claude auth status failed"
         return 16
+    fi
+
+    if ! grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true' /tmp/extractor-auth-status.log 2>/dev/null; then
+        log "ERROR: Claude auth is not logged in"
+        return 17
     fi
 
     return 0
@@ -226,7 +221,7 @@ claude_reauth_hint() {
     local cli_name
     cli_name=$(basename "${CLAUDE_PATH:-$DEFAULT_CLAUDE_PATH}")
     [ -n "$cli_name" ] || cli_name="claude"
-    printf '%s\n' "$cli_name /login"
+    printf '%s\n' "$cli_name auth login"
 }
 
 build_claude_args() {

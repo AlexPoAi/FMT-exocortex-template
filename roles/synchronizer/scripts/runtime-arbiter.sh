@@ -109,29 +109,27 @@ check_codex() {
 }
 
 check_claude() {
-    local claude_path helper
+    local claude_path
     claude_path="${CLAUDE_PATH:-$(command -v claude 2>/dev/null || true)}"
     if [ -z "$claude_path" ] || [ ! -x "$claude_path" ]; then
         return
     fi
 
-    helper="$HOME/.config/aist/anthropic_auth_helper.sh"
-    if [ -x "$helper" ]; then
-        if "$helper" >/tmp/runtime-arbiter-claude.log 2>&1; then
+    if "$claude_path" auth status >/tmp/runtime-arbiter-claude.log 2>&1; then
+        if grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true' /tmp/runtime-arbiter-claude.log 2>/dev/null; then
             claude_available=1
             claude_status="available"
-            claude_reason="auth_helper_ok"
+            claude_reason="auth_status_ok"
             return
         fi
         claude_status="degraded"
-        claude_reason="auth_helper_failed"
+        claude_reason="auth_not_logged_in"
         return
     fi
 
     if "$claude_path" --version >/tmp/runtime-arbiter-claude.log 2>&1; then
-        claude_available=1
-        claude_status="available"
-        claude_reason="cli_present_no_helper"
+        claude_status="degraded"
+        claude_reason="auth_status_failed"
         return
     fi
 
