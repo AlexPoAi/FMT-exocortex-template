@@ -25,8 +25,7 @@ fi
 WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
 DS_STRATEGY="$WORKSPACE_DIR/DS-strategy"
 EXOCORTEX_DST="$DS_STRATEGY/exocortex"
-SELECTIVE_REINDEX="$WORKSPACE_DIR/DS-MCP/knowledge-mcp/scripts/selective-reindex.sh"
-LINEAR_SYNC="$WORKSPACE_DIR/DS-IT-systems/DS-ai-systems/synchronizer/scripts/linear-sync.sh"
+PARAMS_YAML="$WORKSPACE_DIR/params.yaml"
 LOG_FILE="$WORKSPACE_DIR/DS-agent-workspace/scheduler/day-close.log"
 # === /КОНФИГУРАЦИЯ ===
 
@@ -59,6 +58,50 @@ resolve_memory_src() {
 
 MEMORY_SRC="${MEMORY_SRC:-$(resolve_memory_src || true)}"
 
+resolve_selective_reindex() {
+  local candidate
+  for candidate in \
+    "$WORKSPACE_DIR/DS-MCP/knowledge-mcp/scripts/selective-reindex.sh" \
+    "$WORKSPACE_DIR/knowledge-mcp/scripts/selective-reindex.sh" \
+    "$WORKSPACE_DIR/DS-IT-systems/DS-MCP/knowledge-mcp/scripts/selective-reindex.sh"
+  do
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_linear_sync() {
+  local raw candidate
+  if [ -f "$PARAMS_YAML" ] && command -v python3 >/dev/null 2>&1; then
+    raw=$(python3 -c 'import sys; import yaml; d=yaml.safe_load(open(sys.argv[1])) or {}; print(d.get("linear_sync_path",""))' "$PARAMS_YAML" 2>/dev/null || true)
+    if [ -n "$raw" ]; then
+      candidate="${raw/#\~/$HOME}"
+      if [ -x "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    fi
+  fi
+
+  for candidate in \
+    "$WORKSPACE_DIR/DS-IT-systems/DS-ai-systems/synchronizer/scripts/linear-sync.sh" \
+    "$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/linear-sync.sh"
+  do
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+SELECTIVE_REINDEX="${SELECTIVE_REINDEX:-$(resolve_selective_reindex || true)}"
+LINEAR_SYNC="${LINEAR_SYNC:-$(resolve_linear_sync || true)}"
+
 # --- Шаг 1: Backup memory/ + CLAUDE.md → exocortex/ ---
 do_backup() {
   log "Шаг 1/3: Backup memory/ → exocortex/"
@@ -89,8 +132,8 @@ do_backup() {
 do_reindex() {
   log "Шаг 2/3: Knowledge-MCP reindex"
 
-  if [ ! -x "$SELECTIVE_REINDEX" ]; then
-    warn "  selective-reindex.sh не найден: $SELECTIVE_REINDEX — пропуск"
+  if [ -z "${SELECTIVE_REINDEX:-}" ] || [ ! -x "$SELECTIVE_REINDEX" ]; then
+    warn "  selective-reindex.sh не найден: ${SELECTIVE_REINDEX:-not_configured_or_missing} — пропуск"
     return 0
   fi
 
@@ -120,8 +163,8 @@ do_reindex() {
 do_linear() {
   log "Шаг 3/3: Linear sync"
 
-  if [ ! -x "$LINEAR_SYNC" ]; then
-    warn "  linear-sync.sh не найден: $LINEAR_SYNC — пропуск"
+  if [ -z "${LINEAR_SYNC:-}" ] || [ ! -x "$LINEAR_SYNC" ]; then
+    warn "  linear-sync.sh не найден: ${LINEAR_SYNC:-not_configured_or_missing} — пропуск"
     return 0
   fi
 
