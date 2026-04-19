@@ -20,19 +20,20 @@
 
 | Масштаб | Открытие | Работа | Закрытие |
 |---------|----------|--------|----------|
-| **Сессия** | `memory/protocol-open.md` (любое задание, «открывай сессию») | `memory/protocol-work.md` | `/run-protocol close` |
-| **День** | `memory/protocol-open.md` + truthful opening-state («открывай», «открывай день») | Между Day Open и Day Close | `/run-protocol day-close` или manual close по `memory/protocol-close.md` в текущем аутентифицированном агенте |
-| **Неделя** | — | — | `/run-protocol week-close` |
+| **Сессия** | `memory/protocol-open.md` (любое задание, «открывай сессию») | `memory/protocol-work.md` | manual close по `memory/protocol-close.md` в текущем агенте; `/run-protocol close` только если slash-skill реально доступен |
+| **День** | `memory/protocol-open.md` + truthful opening-state («открывай», «открывай день») | Между Day Open и Day Close | manual close по `memory/protocol-close.md` в текущем аутентифицированном агенте; `/run-protocol day-close` только для Claude-среды со slash-skill |
+| **Неделя** | — | — | manual week-close по `memory/protocol-close.md`; `/run-protocol week-close` только если slash-skill доступен |
 
 ### Блокирующие правила
 
 1. **WP Gate:** ЛЮБОЕ задание → протокол Открытия → ДО начала работы.
 2. **Единый маршрут открытия:** `открывай`, `открывай сессию`, `открывай день` всегда проходят через `memory/protocol-open.md` и один русский стартовый экран.
 3. **Close provider-agnostic:** `memory/protocol-close.md` выполняется в текущем рабочем агенте. Если `Claude` не залогинен, но `Codex` работает, day-close НЕ блокируется и продолжается через `Codex`. `claude /login` — только для возврата Claude-route.
-4. **Push:** «заливай» / «запуши» → commit + push без доп. вопросов. Push ДО отчёта Закрытия.
-5. **Close:** Триггер Закрытия → протокол Закрытия → выполнить.
-6. **Чеклист-верификация (Haiku R23):** Quick Close и Day Close — sub-agent Haiku R23 (context isolation). Исключения: сессия ≤15 мин или без изменений файлов.
-7. **Pull-before-Commit / Без Obsidian:** см. §9.
+4. **Slash-route не обязателен:** `/run-protocol *` и `/verify` считать Claude-native convenience layer. Если агент работает в `Codex` или slash-skill недоступен, protocol steps выполняются вручную по файлу `memory/protocol-close.md`/`memory/protocol-open.md` без попытки вызывать slash-команды.
+5. **Push:** «заливай» / «запуши» → commit + push без доп. вопросов. Push ДО отчёта Закрытия.
+6. **Close:** Триггер Закрытия → протокол Закрытия → выполнить.
+7. **Чеклист-верификация (Haiku R23):** Quick Close и Day Close — sub-agent Haiku R23 (context isolation). Исключения: сессия ≤15 мин или без изменений файлов.
+8. **Pull-before-Commit / Без Obsidian:** см. §9.
 
 ### Протокол Работы (полный → `memory/protocol-work.md`)
 
