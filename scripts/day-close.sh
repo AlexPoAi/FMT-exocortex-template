@@ -15,9 +15,15 @@
 set -euo pipefail
 
 # === КОНФИГУРАЦИЯ (настроить при установке) ===
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/IWE}"
+RESOLVE_WORKSPACE_SH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/resolve-workspace.sh"
+if [ ! -f "$RESOLVE_WORKSPACE_SH" ]; then
+  RESOLVE_WORKSPACE_SH="$(cd "$(dirname "$0")/../roles/synchronizer/scripts" && pwd)/resolve-workspace.sh"
+fi
+if [ -f "$RESOLVE_WORKSPACE_SH" ]; then
+  eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
+fi
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
 DS_STRATEGY="$WORKSPACE_DIR/DS-strategy"
-MEMORY_SRC="$HOME/.claude/projects/-Users-$(whoami)-IWE/memory"
 EXOCORTEX_DST="$DS_STRATEGY/exocortex"
 SELECTIVE_REINDEX="$WORKSPACE_DIR/DS-MCP/knowledge-mcp/scripts/selective-reindex.sh"
 LINEAR_SYNC="$WORKSPACE_DIR/DS-IT-systems/DS-ai-systems/synchronizer/scripts/linear-sync.sh"
@@ -34,11 +40,30 @@ log() { echo -e "${GREEN}[day-close]${NC} $1"; }
 warn() { echo -e "${YELLOW}[day-close]${NC} $1"; }
 err() { echo -e "${RED}[day-close]${NC} $1" >&2; }
 
+resolve_memory_src() {
+  local user_slug
+  user_slug="$(whoami)"
+  for candidate in \
+    "$HOME/.claude/projects/-Users-${user_slug}-Github/memory" \
+    "$HOME/.claude/projects/-Users-${user_slug}-Github-DS-strategy/memory" \
+    "$HOME/.claude/projects/-Users-${user_slug}-IWE/memory" \
+    "$WORKSPACE_DIR/memory"
+  do
+    if [ -d "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+MEMORY_SRC="${MEMORY_SRC:-$(resolve_memory_src || true)}"
+
 # --- Шаг 1: Backup memory/ + CLAUDE.md → exocortex/ ---
 do_backup() {
   log "Шаг 1/3: Backup memory/ → exocortex/"
 
-  if [ ! -d "$MEMORY_SRC" ]; then
+  if [ -z "${MEMORY_SRC:-}" ] || [ ! -d "$MEMORY_SRC" ]; then
     err "Memory source not found: $MEMORY_SRC"
     return 1
   fi
@@ -161,6 +186,11 @@ main() {
 
   log "=== Готово ==="
   log "  backup=$backup_status  reindex=$reindex_status  linear=$linear_status"
+
+  if [ "$backup_status" = "fail" ]; then
+    err "Day Close failed: backup step is mandatory"
+    exit 1
+  fi
 }
 
 main "$@"

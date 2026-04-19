@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FMT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RESOLVE_WORKSPACE_SH="$FMT_ROOT/roles/synchronizer/scripts/resolve-workspace.sh"
 
-if [ ! -x "$RESOLVE_WORKSPACE_SH" ]; then
+if [ ! -f "$RESOLVE_WORKSPACE_SH" ]; then
   echo "[day-close-safe] ERROR: resolve-workspace.sh not found: $RESOLVE_WORKSPACE_SH" >&2
   exit 1
 fi
