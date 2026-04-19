@@ -108,6 +108,7 @@
     {"path": "roles/verifier/prompts/verify-wp-acceptance.md"},
     {"path": "roles/verifier/role.yaml"},
     {"path": "scripts/day-close.sh"},
+    {"path": "scripts/day-close-safe.sh"},
     {"path": "setup.sh"},
     {"path": "setup/optional/COVER-IMAGES.md"},
     {"path": "setup/optional/README.md"},
