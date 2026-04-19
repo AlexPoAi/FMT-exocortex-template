@@ -21,17 +21,18 @@
 | Масштаб | Открытие | Работа | Закрытие |
 |---------|----------|--------|----------|
 | **Сессия** | `memory/protocol-open.md` (любое задание, «открывай сессию») | `memory/protocol-work.md` | `/run-protocol close` |
-| **День** | `memory/protocol-open.md` + truthful opening-state («открывай», «открывай день») | Между Day Open и Day Close | `/run-protocol day-close` |
+| **День** | `memory/protocol-open.md` + truthful opening-state («открывай», «открывай день») | Между Day Open и Day Close | `/run-protocol day-close` или manual close по `memory/protocol-close.md` в текущем аутентифицированном агенте |
 | **Неделя** | — | — | `/run-protocol week-close` |
 
 ### Блокирующие правила
 
 1. **WP Gate:** ЛЮБОЕ задание → протокол Открытия → ДО начала работы.
 2. **Единый маршрут открытия:** `открывай`, `открывай сессию`, `открывай день` всегда проходят через `memory/protocol-open.md` и один русский стартовый экран.
-3. **Push:** «заливай» / «запуши» → commit + push без доп. вопросов. Push ДО отчёта Закрытия.
-4. **Close:** Триггер Закрытия → протокол Закрытия → выполнить.
-5. **Чеклист-верификация (Haiku R23):** Quick Close и Day Close — sub-agent Haiku R23 (context isolation). Исключения: сессия ≤15 мин или без изменений файлов.
-6. **Pull-before-Commit / Без Obsidian:** см. §9.
+3. **Close provider-agnostic:** `memory/protocol-close.md` выполняется в текущем рабочем агенте. Если `Claude` не залогинен, но `Codex` работает, day-close НЕ блокируется и продолжается через `Codex`. `claude /login` — только для возврата Claude-route.
+4. **Push:** «заливай» / «запуши» → commit + push без доп. вопросов. Push ДО отчёта Закрытия.
+5. **Close:** Триггер Закрытия → протокол Закрытия → выполнить.
+6. **Чеклист-верификация (Haiku R23):** Quick Close и Day Close — sub-agent Haiku R23 (context isolation). Исключения: сессия ≤15 мин или без изменений файлов.
+7. **Pull-before-Commit / Без Obsidian:** см. §9.
 
 ### Протокол Работы (полный → `memory/protocol-work.md`)
 

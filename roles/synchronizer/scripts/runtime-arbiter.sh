@@ -20,11 +20,19 @@ eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
 STRATEGY_DIR="$WORKSPACE_DIR/DS-strategy"
 CURRENT_DIR="$STRATEGY_DIR/current"
 STATE_DIR="$HOME/.local/state/exocortex"
+ENV_FILE="$HOME/.config/aist/env"
 POLICY_FILE="$CURRENT_DIR/RUNTIME-POLICY.env"
 MODE_FILE="$CURRENT_DIR/RUNTIME-MODE.md"
 STATE_FILE="$STATE_DIR/runtime-arbiter.env"
 
 mkdir -p "$CURRENT_DIR" "$STATE_DIR"
+
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+fi
 
 if [ -f "$POLICY_FILE" ]; then
     set -a

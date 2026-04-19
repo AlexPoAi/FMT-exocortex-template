@@ -17,6 +17,7 @@ PROMPTS_DIR="$REPO_DIR/prompts"
 LOG_DIR="$HOME/logs/extractor"
 STATE_DIR="$HOME/.local/state/exocortex"
 LOCK_DIR="$STATE_DIR/locks"
+STATUS_DIR="$STATE_DIR/status"
 ENV_FILE="$HOME/.config/aist/env"
 DEFAULT_CLAUDE_PATH="${CLAUDE_PATH:-$(command -v claude 2>/dev/null || echo /usr/local/bin/claude)}"
 
@@ -40,6 +41,7 @@ RUNTIME_ARBITER_PATH="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/runtime-arbi
 
 mkdir -p "$LOG_DIR"
 mkdir -p "$LOCK_DIR"
+mkdir -p "$STATUS_DIR"
 
 DATE=$(date +%Y-%m-%d)
 HOUR=$(date +%H)
@@ -117,6 +119,68 @@ notify_telegram() {
     if [ -f "$notify_script" ]; then
         "$notify_script" extractor "$scenario" >> "$LOG_FILE" 2>&1 || true
     fi
+}
+
+shell_quote() {
+    python3 -c 'import shlex,sys; print(shlex.quote(sys.argv[1]))' "${1:-}"
+}
+
+write_status_artifact() {
+    local task="$1"
+    local status="$2"
+    local exit_code="$3"
+    local summary="${4:-}"
+    local evidence_status="${5:-reported}"
+    local evidence_summary="${6:-reported by extractor runner}"
+    local error_summary="${7:-}"
+    local completed_window="${8:-false}"
+    local status_file previous_last_success previous_last_failure now_ts run_id
+
+    [ -n "$task" ] || return 0
+
+    status_file="$STATUS_DIR/${task}.status"
+    previous_last_success=""
+    previous_last_failure=""
+
+    if [ -f "$status_file" ]; then
+        # shellcheck disable=SC1090
+        source "$status_file"
+        previous_last_success="${LAST_SUCCESS_AT:-}"
+        previous_last_failure="${LAST_FAILURE_AT:-}"
+    fi
+
+    now_ts="$(date '+%Y-%m-%d %H:%M:%S')"
+    run_id="$(date '+%Y%m%d-%H%M%S')-$$"
+
+    if [ "$status" = "success" ]; then
+        previous_last_success="$now_ts"
+    fi
+
+    if [ "$status" = "failed" ] || [ "$status" = "timeout" ] || [ "$status" = "auth_failed" ]; then
+        previous_last_failure="$now_ts"
+    fi
+
+    cat > "$status_file" <<EOF
+TASK_NAME=$(shell_quote "$task")
+RUN_ID=$(shell_quote "$run_id")
+STATUS=$(shell_quote "$status")
+EXIT_CODE=$(shell_quote "$exit_code")
+SUMMARY=$(shell_quote "$summary")
+START_TS=$(shell_quote "${SCENARIO_STARTED_AT:-$now_ts}")
+END_TS=$(shell_quote "$now_ts")
+LAST_STARTED_AT=$(shell_quote "${SCENARIO_STARTED_AT:-$now_ts}")
+LAST_FINISHED_AT=$(shell_quote "$now_ts")
+LAST_SUCCESS_AT=$(shell_quote "$previous_last_success")
+LAST_FAILURE_AT=$(shell_quote "$previous_last_failure")
+EVIDENCE_STATUS=$(shell_quote "$evidence_status")
+EVIDENCE_SUMMARY=$(shell_quote "$evidence_summary")
+ERROR_SUMMARY=$(shell_quote "$error_summary")
+STALENESS_BUDGET_SEC="10800"
+PRODUCED_ARTIFACTS=""
+COMPLETED_WINDOW=$(shell_quote "$completed_window")
+LOG_PATH=$(shell_quote "$LOG_FILE")
+UPDATED_AT=$(shell_quote "$now_ts")
+EOF
 }
 
 load_env() {
@@ -616,12 +680,15 @@ load_env
 
 case "${1:-}" in
     "inbox-check")
+        SCENARIO_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
         if ! is_work_hours; then
             log "SKIP: inbox-check outside work hours ($HOUR:00)"
+            write_status_artifact "extractor-inbox-check" "success" "0" "outside work hours" "verified" "runner skipped outside work hours by policy" "" "true"
             exit 0
         fi
 
         if ! acquire_lock "extractor-inbox-check"; then
+            write_status_artifact "extractor-inbox-check" "running" "2" "another extractor process holds the scenario lock" "reported" "live lock detected" "" "false"
             exit 2
         fi
 
@@ -634,16 +701,24 @@ case "${1:-}" in
 
             if [ "$ACTUAL_PENDING" -le 0 ]; then
                 log "SKIP: No pending captures in inbox (total=$PENDING, processed=$PROCESSED, analyzed=$ANALYZED)"
+                write_status_artifact "extractor-inbox-check" "success" "0" "no pending captures in inbox" "verified" "runner checked inbox and found nothing pending" "" "true"
                 exit 0
             fi
 
             log "Found $ACTUAL_PENDING pending captures in inbox"
         else
             log "SKIP: captures.md not found"
+            write_status_artifact "extractor-inbox-check" "success" "0" "captures.md not found" "verified" "runner checked inbox source file and found no captures file" "" "true"
             exit 0
         fi
 
-        run_claude "inbox-check"
+        if run_claude "inbox-check"; then
+            write_status_artifact "extractor-inbox-check" "success" "0" "completed successfully" "verified" "inbox-check completed successfully" "" "true"
+        else
+            rc=$?
+            write_status_artifact "extractor-inbox-check" "failed" "$rc" "extractor inbox-check failed" "reported" "runner returned non-zero exit" "inbox-check exit=$rc" "false"
+            exit "$rc"
+        fi
         notify_telegram "inbox-check"
         ;;
     "audit")
