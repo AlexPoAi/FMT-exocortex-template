@@ -374,6 +374,11 @@ check_runtime_contract() {
 check_legacy_launchd_conflicts() {
     local loaded=""
 
+    if ! command -v launchctl >/dev/null 2>&1; then
+        log "INFO: launchctl недоступен, проверка legacy launchd конфликтов пропущена"
+        return
+    fi
+
     if launchctl list | grep -q 'com.strategist.morning'; then
         loaded="$loaded com.strategist.morning"
     fi
@@ -476,18 +481,37 @@ agent_display_name() {
 
 log "=== Проверка здоровья запущена ==="
 
-if launchctl list | grep -q 'com.exocortex.scheduler'; then
-    log "ОК: планировщик загружен"
-else
-    ERRORS+=("🔴 Планировщик экзокортекса не загружен")
-    log "ОШИБКА: планировщик экзокортекса не загружен"
-fi
+if command -v launchctl >/dev/null 2>&1; then
+    if launchctl list | grep -q 'com.exocortex.scheduler'; then
+        log "ОК: планировщик загружен (launchd)"
+    else
+        ERRORS+=("🔴 Планировщик экзокортекса не загружен")
+        log "ОШИБКА: планировщик экзокортекса не загружен (launchd)"
+    fi
 
-if launchctl list | grep -q 'com.exocortex.health-check'; then
-    log "ОК: проверка среды загружена"
+    if launchctl list | grep -q 'com.exocortex.health-check'; then
+        log "ОК: проверка среды загружена (launchd)"
+    else
+        WARNINGS+=("🟡 Проверка среды не загружена")
+        log "ВНИМАНИЕ: проверка среды не загружена (launchd)"
+    fi
+elif command -v systemctl >/dev/null 2>&1; then
+    if systemctl is-active --quiet com.exocortex.scheduler.timer; then
+        log "ОК: планировщик загружен (systemd)"
+    else
+        ERRORS+=("🔴 Планировщик экзокортекса не загружен")
+        log "ОШИБКА: планировщик экзокортекса не загружен (systemd)"
+    fi
+
+    if systemctl is-active --quiet com.exocortex.health-check.timer; then
+        log "ОК: проверка среды загружена (systemd)"
+    else
+        WARNINGS+=("🟡 Проверка среды не загружена")
+        log "ВНИМАНИЕ: проверка среды не загружена (systemd)"
+    fi
 else
-    WARNINGS+=("🟡 Проверка среды не загружена")
-    log "ВНИМАНИЕ: проверка среды не загружена"
+    WARNINGS+=("🟡 Не удалось определить планировщик среды: launchctl/systemctl недоступны")
+    log "ВНИМАНИЕ: neither launchctl nor systemctl detected; scheduler bootstrap check skipped"
 fi
 
 check_protocol_contract
