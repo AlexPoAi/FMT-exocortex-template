@@ -1,7 +1,7 @@
 #!/bin/bash
 # day-close.sh — Автоматические шаги Day Close (backup + reindex + linear sync)
 #
-# Вызывается Claude из протокола Day Close (protocol-close.md § День, шаг 4).
+# Вызывается из provider-agnostic Day Close route (`protocol-close.md` / `day-close-safe.sh`, шаг механических операций).
 # Объединяет три механических операции в одну команду.
 #
 # Использование:

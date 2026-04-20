@@ -622,11 +622,13 @@ ${prompt}"
 
     AI_CLI_PROVIDER_PRIMARY="$(resolve_provider_primary_choice)"
 
-    if [ "${STRATEGIST_WEEK_REVIEW_FORCE_CLAUDE:-0}" = "1" ] && [ "$command_file" = "week-review" ] && [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
+    if [ "${STRATEGIST_WEEK_REVIEW_FORCE_CLAUDE:-0}" = "1" ] && [ "${STRATEGIST_ALLOW_LEGACY_CLAUDE_OVERRIDE:-0}" = "1" ] && [ "$command_file" = "week-review" ] && [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
         AI_CLI_PROVIDER_PRIMARY="claude"
         AI_CLI_PRIMARY_MODEL="claude-haiku-4-5"
         AI_CLI_FALLBACK_MODEL="claude-sonnet-4-6"
-        log "Week-review override: force Claude path enabled via STRATEGIST_WEEK_REVIEW_FORCE_CLAUDE=1"
+        log "Week-review override: legacy Claude debug path enabled via STRATEGIST_WEEK_REVIEW_FORCE_CLAUDE=1 + STRATEGIST_ALLOW_LEGACY_CLAUDE_OVERRIDE=1"
+    elif [ "${STRATEGIST_WEEK_REVIEW_FORCE_CLAUDE:-0}" = "1" ] && [ "$command_file" = "week-review" ]; then
+        log "WARN: ignored STRATEGIST_WEEK_REVIEW_FORCE_CLAUDE=1 because legacy Claude override now requires STRATEGIST_ALLOW_LEGACY_CLAUDE_OVERRIDE=1"
     fi
 
     if uses_codex_as_primary; then
