@@ -937,10 +937,100 @@ refresh_runtime_mode_artifact() {
 }
 
 write_status_artifacts() {
+    write_synchronizer_status_artifact "synchronizer-code-scan"
+    write_synchronizer_status_artifact "synchronizer-daily-report"
     build_agents_status > "$AGENTS_STATUS_FILE"
     log "Agents status written: $AGENTS_STATUS_FILE"
     build_session_open > "$SESSION_OPEN_FILE"
     log "Session open written: $SESSION_OPEN_FILE"
+}
+
+write_synchronizer_status_artifact() {
+    local task="$1"
+    local status_file="$STATUS_DIR/${task}.status"
+    local now_ts run_id log_path produced_artifacts previous_last_success previous_last_failure
+    local derived_status derived_exit_code derived_summary derived_start_ts derived_end_ts
+    local derived_last_started derived_last_finished derived_updated_at derived_evidence_status
+    local derived_evidence_summary derived_error_summary derived_budget derived_completed_window
+
+    load_status "$task"
+
+    derived_status="${STATUS:-missing}"
+    derived_exit_code="${EXIT_CODE:-}"
+    derived_summary="${SUMMARY:-status artifact refreshed from daily-report}"
+    derived_start_ts="${START_TS:-${UPDATED_AT:-}}"
+    derived_end_ts="${END_TS:-${UPDATED_AT:-}}"
+    derived_last_started="${LAST_STARTED_AT:-${UPDATED_AT:-}}"
+    derived_last_finished="${LAST_FINISHED_AT:-${UPDATED_AT:-}}"
+    derived_updated_at="${UPDATED_AT:-}"
+    derived_evidence_status="${EVIDENCE_STATUS:-derived}"
+    derived_evidence_summary="${EVIDENCE_SUMMARY:-refreshed from daily-report}"
+    derived_error_summary="${ERROR_SUMMARY:-}"
+    derived_budget="${STALENESS_BUDGET_SEC:-86400}"
+    derived_completed_window="${COMPLETED_WINDOW:-false}"
+
+    now_ts="$(date '+%Y-%m-%d %H:%M:%S')"
+    run_id="$(date '+%Y%m%d-%H%M%S')-$$"
+    previous_last_success=""
+    previous_last_failure=""
+    log_path=""
+    produced_artifacts=""
+
+    if [ -f "$status_file" ]; then
+        # shellcheck disable=SC1090
+        source "$status_file"
+        previous_last_success="${LAST_SUCCESS_AT:-}"
+        previous_last_failure="${LAST_FAILURE_AT:-}"
+    fi
+
+    if [ "$derived_status" = "success" ]; then
+        previous_last_success="${derived_updated_at:-$now_ts}"
+    fi
+
+    if [ "$derived_status" = "failed" ]; then
+        previous_last_failure="${derived_updated_at:-$now_ts}"
+    fi
+
+    case "$derived_summary" in
+        "derived from fresh daily marker"|"derived from legacy daily marker")
+            derived_start_ts="${derived_updated_at:-$now_ts}"
+            derived_end_ts="${derived_updated_at:-$now_ts}"
+            derived_last_started="${derived_updated_at:-$now_ts}"
+            derived_last_finished="${derived_updated_at:-$now_ts}"
+            ;;
+    esac
+
+    case "$task" in
+        synchronizer-code-scan)
+            log_path="$LOG_DIR/code-scan-$DATE.log"
+            ;;
+        synchronizer-daily-report)
+            log_path="$LOG_DIR/daily-report-$DATE.log"
+            produced_artifacts="current/SchedulerReport $DATE.md;current/AGENTS-STATUS.md;current/SESSION-OPEN (Экран открытия сессии).md"
+            ;;
+    esac
+
+    cat > "$status_file" <<EOF
+TASK_NAME="$task"
+RUN_ID="$run_id"
+STATUS="$derived_status"
+EXIT_CODE="$derived_exit_code"
+SUMMARY="$derived_summary"
+START_TS="${derived_start_ts:-${derived_updated_at:-$now_ts}}"
+END_TS="${derived_end_ts:-${derived_updated_at:-$now_ts}}"
+LAST_STARTED_AT="${derived_last_started:-${derived_updated_at:-$now_ts}}"
+LAST_FINISHED_AT="${derived_last_finished:-${derived_updated_at:-$now_ts}}"
+LAST_SUCCESS_AT="$previous_last_success"
+LAST_FAILURE_AT="$previous_last_failure"
+EVIDENCE_STATUS="$derived_evidence_status"
+EVIDENCE_SUMMARY="$derived_evidence_summary"
+ERROR_SUMMARY="$derived_error_summary"
+STALENESS_BUDGET_SEC="$derived_budget"
+PRODUCED_ARTIFACTS="$produced_artifacts"
+COMPLETED_WINDOW="$derived_completed_window"
+LOG_PATH="$log_path"
+UPDATED_AT="${derived_updated_at:-$now_ts}"
+EOF
 }
 
 commit_strategy_artifacts() {
