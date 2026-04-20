@@ -622,11 +622,11 @@ ${prompt}"
 
     AI_CLI_PROVIDER_PRIMARY="$(resolve_provider_primary_choice)"
 
-    if [ "$command_file" = "week-review" ] && [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
+    if [ "${STRATEGIST_WEEK_REVIEW_FORCE_CLAUDE:-0}" = "1" ] && [ "$command_file" = "week-review" ] && [ -n "$CLAUDE_PATH" ] && [ -x "$CLAUDE_PATH" ]; then
         AI_CLI_PROVIDER_PRIMARY="claude"
         AI_CLI_PRIMARY_MODEL="claude-haiku-4-5"
         AI_CLI_FALLBACK_MODEL="claude-sonnet-4-6"
-        log "Week-review override: prefer Claude-compatible primary path for stability"
+        log "Week-review override: force Claude path enabled via STRATEGIST_WEEK_REVIEW_FORCE_CLAUDE=1"
     fi
 
     if uses_codex_as_primary; then
@@ -684,7 +684,7 @@ ${prompt}"
         fi
         log_provider_output_summary "claude" "$command_file" "$tmp_out" "" "$rc"
 
-        if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled' "$tmp_out" 2>/dev/null; then
+        if grep -Eq 'authentication_error|OAuth token has expired|API Error: 401|Failed to authenticate|ANTHROPIC_AUTH_TOKEN is not set|API key is disabled|Not logged in .*Please run /login' "$tmp_out" 2>/dev/null; then
             log "CRITICAL: Claude-compatible provider auth failed for scenario: $command_file"
             if has_codex_fallback; then
                 rm -f "$tmp_out"
