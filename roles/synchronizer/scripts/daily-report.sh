@@ -24,9 +24,9 @@ RUNTIME_ARBITER_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/s
 RUNTIME_POLICY_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-POLICY.env"
 RUNTIME_MODE_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-MODE.md"
 OBSIDIAN_VAULT_DIR="$WORKSPACE_DIR/creativ-convector"
-SELECTION_BOARD_DIR="$OBSIDIAN_VAULT_DIR/2. Черновики/Доска выбора"
+SELECTION_BOARD_DIR="$OBSIDIAN_VAULT_DIR/Доска выбора"
 SELECTION_BOARD_BEACON_FILE="$SELECTION_BOARD_DIR/00-Сводка доски выбора.md"
-STRATEGIST_BOARD_DIR="$OBSIDIAN_VAULT_DIR/2. Черновики/Доска стратега"
+STRATEGIST_BOARD_DIR="$OBSIDIAN_VAULT_DIR/Доска стратега"
 STRATEGIST_BOARD_BEACON_FILE="$STRATEGIST_BOARD_DIR/00-Свежесть доски стратега.md"
 
 # Agent Workspace: если существует — отчёты идут туда
