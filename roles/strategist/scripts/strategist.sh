@@ -924,6 +924,7 @@ case "$1" in
         acquire_lock "week-review"
         if already_ran_this_week "week-review"; then
             log "SKIP: week-review already completed in current week-window"
+            SCENARIO_STALENESS_BUDGET=604800
             write_status_artifact "$(status_task_for_scenario "week-review")" "success" "0" "already completed earlier this week-window" "verified" "same-week completion detected before rerun" "" "true"
             exit 0
         fi
