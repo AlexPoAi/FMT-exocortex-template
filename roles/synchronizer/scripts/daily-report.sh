@@ -23,6 +23,11 @@ CANONICAL_MEMORY_DIR="$WORKSPACE_DIR/memory"
 RUNTIME_ARBITER_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
 RUNTIME_POLICY_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-POLICY.env"
 RUNTIME_MODE_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-MODE.md"
+OBSIDIAN_VAULT_DIR="$WORKSPACE_DIR/creativ-convector"
+SELECTION_BOARD_DIR="$OBSIDIAN_VAULT_DIR/2. Черновики/Доска выбора"
+SELECTION_BOARD_BEACON_FILE="$SELECTION_BOARD_DIR/00-Сводка доски выбора.md"
+STRATEGIST_BOARD_DIR="$OBSIDIAN_VAULT_DIR/2. Черновики/Доска стратега"
+STRATEGIST_BOARD_BEACON_FILE="$STRATEGIST_BOARD_DIR/00-Свежесть доски стратега.md"
 
 # Agent Workspace: если существует — отчёты идут туда
 AGENT_WORKSPACE="$DS_AGENT_WORKSPACE_DIR"
@@ -266,6 +271,82 @@ apply_legacy_marker_override() {
     fi
 }
 
+human_layer_selection_status() {
+    if [ ! -d "$SELECTION_BOARD_DIR" ]; then
+        echo "missing"
+        return
+    fi
+
+    if [ ! -f "$SELECTION_BOARD_BEACON_FILE" ]; then
+        echo "missing"
+        return
+    fi
+
+    if ! grep -q '^updated: '"$DATE"'$' "$SELECTION_BOARD_BEACON_FILE" 2>/dev/null; then
+        echo "stale"
+        return
+    fi
+
+    if grep -q '🟡 Ждут ручного решения: \*\*[1-9]' "$SELECTION_BOARD_BEACON_FILE" 2>/dev/null; then
+        echo "needs_attention"
+        return
+    fi
+
+    echo "ok"
+}
+
+human_layer_strategist_status() {
+    local beacon_status
+
+    if [ ! -d "$STRATEGIST_BOARD_DIR" ]; then
+        echo "missing"
+        return
+    fi
+
+    if [ ! -f "$STRATEGIST_BOARD_BEACON_FILE" ]; then
+        echo "missing"
+        return
+    fi
+
+    beacon_status="$(sed -n 's/^- Общий статус: \*\*\(.*\)\*\*$/\1/p' "$STRATEGIST_BOARD_BEACON_FILE" | head -n1)"
+    case "$beacon_status" in
+        свежо) echo "ok" ;;
+        "требует внимания") echo "needs_attention" ;;
+        устарело) echo "stale" ;;
+        "ждёт ручного решения") echo "needs_attention" ;;
+        *)
+            if grep -q '^updated: '"$DATE"'$' "$STRATEGIST_BOARD_BEACON_FILE" 2>/dev/null; then
+                echo "ok"
+            else
+                echo "stale"
+            fi
+            ;;
+    esac
+}
+
+human_layer_overall_status() {
+    local selection_status strategist_status
+    selection_status="$(human_layer_selection_status)"
+    strategist_status="$(human_layer_strategist_status)"
+
+    if [ "$selection_status" = "missing" ] || [ "$strategist_status" = "missing" ]; then
+        echo "red"
+        return
+    fi
+
+    if [ "$selection_status" = "stale" ] || [ "$strategist_status" = "stale" ]; then
+        echo "yellow"
+        return
+    fi
+
+    if [ "$selection_status" = "needs_attention" ] || [ "$strategist_status" = "needs_attention" ]; then
+        echo "yellow"
+        return
+    fi
+
+    echo "green"
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -463,6 +544,7 @@ build_agents_status() {
     local brain="🟢 зелёный"
     local protocol_contract="🟢 зелёный"
     local runtime_plane="🟢 зелёный"
+    local human_layer="🟢 зелёный"
     local updated
     updated="$(date '+%Y-%m-%d %H:%M')"
     load_runtime_status
@@ -490,6 +572,18 @@ build_agents_status() {
         [ "$runtime_plane" = "🟢 зелёный" ] && runtime_plane="🟡 требует внимания"
         [ "$brain" = "🟢 зелёный" ] && brain="🟡 требует внимания"
     fi
+
+    case "$(human_layer_overall_status)" in
+        green) ;;
+        yellow)
+            human_layer="🟡 требует внимания"
+            [ "$brain" = "🟢 зелёный" ] && brain="🟡 требует внимания"
+            ;;
+        red)
+            human_layer="🔴 требует внимания"
+            [ "$brain" = "🟢 зелёный" ] && brain="🟡 требует внимания"
+            ;;
+    esac
 
     for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
         load_status "$task"
@@ -553,6 +647,7 @@ build_agents_status() {
 - Помощник авторизации: **$auth**
 - Canonical protocol route: **$protocol_contract**
 - Runtime arbiter: **$runtime_plane**
+- Obsidian human layer: **$human_layer**
 - Статус-артефакты: **$sync**
 - Стратег: **$strategist**
 - Экстрактор: **$extractor**
@@ -587,6 +682,7 @@ build_session_open() {
     local stale_list=""
     local protocol_route_status="🟢 green"
     local runtime_plane_status="🟢 green"
+    local human_layer_status="🟢 green"
     local provider_line="codex/claude availability unknown"
     local updated
     updated="$(date '+%Y-%m-%d %H:%M:%S')"
@@ -628,6 +724,24 @@ build_session_open() {
         [ "$verdict_label" = "Мозг экзокортекса — готов к работе" ] && verdict_label="Мозг экзокортекса — требует внимания"
         runtime_plane_status="🟡 yellow"
     fi
+
+    case "$(human_layer_overall_status)" in
+        green) ;;
+        yellow)
+            [ "$verdict_emoji" = "🟢" ] && verdict_emoji="🟡"
+            [ "$verdict_color" = "🟢 green" ] && verdict_color="🟡 yellow"
+            [ "$verdict_label" = "Мозг экзокортекса — готов к работе" ] && verdict_label="Мозг экзокортекса — требует внимания"
+            human_layer_status="🟡 yellow"
+            issues="${issues}- Obsidian human layer требует внимания\n"
+            ;;
+        red)
+            [ "$verdict_emoji" = "🟢" ] && verdict_emoji="🟡"
+            [ "$verdict_color" = "🟢 green" ] && verdict_color="🟡 yellow"
+            [ "$verdict_label" = "Мозг экзокортекса — готов к работе" ] && verdict_label="Мозг экзокортекса — требует внимания"
+            human_layer_status="🔴 red"
+            issues="${issues}- Obsidian human layer: отсутствуют критические артефакты\n"
+            ;;
+    esac
 
     provider_line="primary=$RUNTIME_PROVIDER_PRIMARY, codex=$RUNTIME_CODEX_STATUS, claude=$RUNTIME_CLAUDE_STATUS"
 
@@ -680,6 +794,7 @@ build_session_open() {
 - Помощник авторизации: **🟢 green**
 - Canonical protocol route: **$protocol_route_status**
 - Runtime arbiter: **$runtime_plane_status**
+- Obsidian human layer: **$human_layer_status**
 - Статус-артефакты: **$( [ "$verdict_emoji" = "🔴" ] && echo "🔴 red" || [ "$verdict_emoji" = "🟡" ] && echo "🟡 yellow" || echo "🟢 green")**
 
 ## Runtime mode

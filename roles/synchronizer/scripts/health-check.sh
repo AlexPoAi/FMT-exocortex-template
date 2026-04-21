@@ -21,6 +21,11 @@ OPENING_CONTRACT_CHECK_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchro
 RUNTIME_ARBITER_PATH="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/runtime-arbiter.sh"
 RUNTIME_POLICY_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-POLICY.env"
 RUNTIME_MODE_FILE="$WORKSPACE_DIR/DS-strategy/current/RUNTIME-MODE.md"
+OBSIDIAN_VAULT_DIR="$WORKSPACE_DIR/creativ-convector"
+SELECTION_BOARD_DIR="$OBSIDIAN_VAULT_DIR/2. Черновики/Доска выбора"
+SELECTION_BOARD_BEACON_FILE="$SELECTION_BOARD_DIR/00-Сводка доски выбора.md"
+STRATEGIST_BOARD_DIR="$OBSIDIAN_VAULT_DIR/2. Черновики/Доска стратега"
+STRATEGIST_BOARD_BEACON_FILE="$STRATEGIST_BOARD_DIR/00-Свежесть доски стратега.md"
 
 mkdir -p "$LOG_DIR"
 
@@ -417,6 +422,102 @@ check_strategist_notify_contract() {
     fi
 }
 
+human_layer_selection_status() {
+    if [ ! -d "$SELECTION_BOARD_DIR" ]; then
+        echo "missing"
+        return
+    fi
+
+    if [ ! -f "$SELECTION_BOARD_BEACON_FILE" ]; then
+        echo "missing"
+        return
+    fi
+
+    if ! grep -q '^updated: '"$DATE"'$' "$SELECTION_BOARD_BEACON_FILE" 2>/dev/null; then
+        echo "stale"
+        return
+    fi
+
+    if grep -q '🟡 Ждут ручного решения: \*\*[1-9]' "$SELECTION_BOARD_BEACON_FILE" 2>/dev/null; then
+        echo "needs_attention"
+        return
+    fi
+
+    echo "ok"
+}
+
+human_layer_strategist_status() {
+    local beacon_status
+
+    if [ ! -d "$STRATEGIST_BOARD_DIR" ]; then
+        echo "missing"
+        return
+    fi
+
+    if [ ! -f "$STRATEGIST_BOARD_BEACON_FILE" ]; then
+        echo "missing"
+        return
+    fi
+
+    beacon_status="$(sed -n 's/^- Общий статус: \*\*\(.*\)\*\*$/\1/p' "$STRATEGIST_BOARD_BEACON_FILE" | head -n1)"
+    case "$beacon_status" in
+        свежо) echo "ok" ;;
+        "требует внимания") echo "needs_attention" ;;
+        устарело) echo "stale" ;;
+        "ждёт ручного решения") echo "needs_attention" ;;
+        *)
+            if grep -q '^updated: '"$DATE"'$' "$STRATEGIST_BOARD_BEACON_FILE" 2>/dev/null; then
+                echo "ok"
+            else
+                echo "stale"
+            fi
+            ;;
+    esac
+}
+
+check_human_layer_contract() {
+    local selection_status strategist_status
+
+    selection_status="$(human_layer_selection_status)"
+    strategist_status="$(human_layer_strategist_status)"
+
+    case "$selection_status" in
+        ok)
+            log "ОК: human-layer selection board beacon свежий"
+            ;;
+        needs_attention)
+            WARNINGS+=("🟡 Human layer: Доска выбора ждёт ручного решения")
+            log "ВНИМАНИЕ: human-layer selection board ждёт ручного решения"
+            ;;
+        stale)
+            WARNINGS+=("🟡 Human layer: Доска выбора устарела")
+            log "ВНИМАНИЕ: human-layer selection board stale"
+            ;;
+        missing)
+            WARNINGS+=("🟡 Human layer: missing beacon для Доски выбора")
+            log "ВНИМАНИЕ: human-layer selection board beacon missing"
+            ;;
+    esac
+
+    case "$strategist_status" in
+        ok)
+            log "ОК: human-layer strategist board свежий"
+            ;;
+        needs_attention)
+            WARNINGS+=("🟡 Human layer: Доска стратега требует внимания")
+            log "ВНИМАНИЕ: human-layer strategist board requires attention"
+            ;;
+        stale)
+            WARNINGS+=("🟡 Human layer: Доска стратега устарела")
+            log "ВНИМАНИЕ: human-layer strategist board stale"
+            ;;
+        missing)
+            WARNINGS+=("🟡 Human layer: missing beacon для Доски стратега")
+            log "ВНИМАНИЕ: human-layer strategist board beacon missing"
+            ;;
+    esac
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -519,6 +620,7 @@ check_opening_contract
 check_runtime_contract
 check_legacy_launchd_conflicts
 check_strategist_notify_contract
+check_human_layer_contract
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
     load_status "$task"
