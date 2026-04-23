@@ -31,6 +31,7 @@ Target capability:
 | `daily-report.sh` | Отчёт здоровья: светофор, ошибки, рекомендации | scheduler (после утра) |
 | `sync-files.sh` | Точечная синхронизация файлов из remote | scheduler (каждые 2 мин) |
 | `notify.sh` | Отправка в Telegram через шаблоны агентов | После каждого процесса |
+| `send-telegram.sh` | Ручная отправка текста, фото и документов в Telegram | По запросу |
 
 ## Установка
 
@@ -78,6 +79,7 @@ roles/synchronizer/
 │   ├── daily-report.sh            # Отчёт здоровья
 │   ├── sync-files.sh              # Точечная синхронизация
 │   ├── notify.sh                  # Telegram dispatch
+│   ├── send-telegram.sh           # Ручная отправка текста/фото/документов
 │   ├── templates/
 │   │   ├── strategist.sh          # Шаблон TG для Стратега
 │   │   ├── extractor.sh           # Шаблон TG для Экстрактора
