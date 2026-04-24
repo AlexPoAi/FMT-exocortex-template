@@ -53,12 +53,15 @@ EXOCORTEX_BACKUP="$DS_STRATEGY_DIR/exocortex"
 UPDATE_ECOSYSTEM="$FMT_EXOCORTEX_DIR/roles/extractor/scripts/update-ecosystem.sh"
 DAY_CLOSE_NOTIFY_SCRIPT="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/notify.sh"
 
-REPOS=(
-    "$WORKSPACE_DIR/VK-offee"
-    "$WORKSPACE_DIR/creativ-convector"
-    "$DS_STRATEGY_DIR"
-    "$FMT_EXOCORTEX_DIR"
-)
+REPOS=()
+while IFS= read -r git_dir; do
+    REPOS+=("$(dirname "$git_dir")")
+done < <(find "$WORKSPACE_DIR" -maxdepth 2 -name .git -type d -prune | sort)
+
+if [ ${#REPOS[@]} -eq 0 ]; then
+    echo "❌ В workspace не найдено git-репозиториев: $WORKSPACE_DIR" >&2
+    exit 1
+fi
 
 PUSHED=()
 CHANGED_REPOS=()
