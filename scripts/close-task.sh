@@ -101,6 +101,29 @@ active_wp_is_approved() {
     grep -Eq '^approved:[[:space:]]*true[[:space:]]*$' "$ACTIVE_WP_FILE"
 }
 
+consume_active_wp_approval() {
+    local tmp
+    [ -f "$ACTIVE_WP_FILE" ] || return 0
+    active_wp_is_approved || return 0
+
+    tmp=$(mktemp)
+    if ! awk -v timestamp="$TIMESTAMP" '
+        /^approved:[[:space:]]*true[[:space:]]*$/ && consumed == 0 {
+            print "approved: consumed"
+            print "approval_consumed_at: " timestamp
+            consumed = 1
+            next
+        }
+        { print }
+    ' "$ACTIVE_WP_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        record_error "Sensitive WP Gate: не удалось consume ACTIVE-WP approval"
+        return 1
+    fi
+
+    mv "$tmp" "$ACTIVE_WP_FILE"
+}
+
 active_wp_scope_matches() {
     local repo_name="$1"
     local changed_path="$2"
@@ -579,6 +602,7 @@ if ! verify_sensitive_wp_gate || [ ${#ERRORS[@]} -gt 0 ]; then
     echo ""
     exit 1
 fi
+consume_active_wp_approval
 
 run_git_close_pass
 
