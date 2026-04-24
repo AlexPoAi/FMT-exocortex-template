@@ -68,6 +68,7 @@ PUSHED=()
 CHANGED_REPOS=()
 ERRORS=()
 WARNINGS=()
+ECOSYSTEM_REPAIR_SCOPE=0
 
 log() {
     echo "[$TIMESTAMP] $1" >> "$LOG"
@@ -99,6 +100,16 @@ is_sensitive_repo() {
 active_wp_is_approved() {
     [ -f "$ACTIVE_WP_FILE" ] || return 1
     grep -Eq '^approved:[[:space:]]*true[[:space:]]*$' "$ACTIVE_WP_FILE"
+}
+
+active_wp_id() {
+    [ -f "$ACTIVE_WP_FILE" ] || return 1
+    awk -F ': *' '$1 == "id" { print $2; exit }' "$ACTIVE_WP_FILE"
+}
+
+active_wp_context_file() {
+    local wp_id="$1"
+    find "$DS_STRATEGY_DIR/inbox" -maxdepth 1 -type f -name "${wp_id}-*.md" | head -1
 }
 
 consume_active_wp_approval() {
@@ -210,16 +221,35 @@ root_helper_source_for() {
 
 verify_sensitive_wp_gate() {
     local required=()
-    local repo repo_name changed_path helper installed source item scope_repo scope_path
+    local repo repo_name changed_path scoped_path helper installed source item scope_repo scope_path
 
     for repo in "${REPOS[@]}"; do
         [ -d "$repo/.git" ] || continue
         repo_name=$(basename "$repo")
         is_sensitive_repo "$repo_name" || continue
-        while IFS= read -r changed_path; do
-            [ -n "$changed_path" ] || continue
-            required+=("$repo_name"$'\t'"$changed_path")
-        done < <(changed_paths_for_repo "$repo")
+        if [ "$SCOPED_CLOSE" -eq 1 ]; then
+            while IFS= read -r scoped_path; do
+                [ -n "$scoped_path" ] || continue
+                if ! git -C "$repo" diff --quiet -- "$scoped_path" 2>/dev/null || ! git -C "$repo" diff --cached --quiet -- "$scoped_path" 2>/dev/null || [ -n "$(git -C "$repo" ls-files --others --exclude-standard -- "$scoped_path" 2>/dev/null)" ]; then
+                    required+=("$repo_name"$'\t'"$scoped_path")
+                    case "$repo_name:$scoped_path" in
+                        FMT-exocortex-template:*|DS-strategy:exocortex/*|DS-strategy:current/ACTIVE-WP.md)
+                            ECOSYSTEM_REPAIR_SCOPE=1
+                            ;;
+                    esac
+                fi
+            done < <(scope_paths_for_repo "$repo_name")
+        else
+            while IFS= read -r changed_path; do
+                [ -n "$changed_path" ] || continue
+                required+=("$repo_name"$'\t'"$changed_path")
+                case "$repo_name:$changed_path" in
+                    FMT-exocortex-template:*|DS-strategy:exocortex/*|DS-strategy:current/ACTIVE-WP.md)
+                        ECOSYSTEM_REPAIR_SCOPE=1
+                        ;;
+                esac
+            done < <(changed_paths_for_repo "$repo")
+        fi
     done
 
     for helper in Codex-Github.code-workspace close-task.sh open-codex-github.sh strategist-wrapper.sh; do
@@ -230,6 +260,7 @@ verify_sensitive_wp_gate() {
         [ -f "$source" ] || continue
         if ! cmp -s "$installed" "$source"; then
             required+=("workspace-root"$'\t'"$helper")
+            ECOSYSTEM_REPAIR_SCOPE=1
         fi
     done
 
@@ -254,6 +285,30 @@ verify_sensitive_wp_gate() {
     done
 
     return 0
+}
+
+verify_ecosystem_repair_ritual() {
+    local wp_id wp_file
+
+    [ "$ECOSYSTEM_REPAIR_SCOPE" -eq 1 ] || return 0
+
+    wp_id="$(active_wp_id 2>/dev/null || true)"
+    if [ -z "$wp_id" ]; then
+        record_error "Ecosystem Repair Gate: ACTIVE-WP.md не содержит id"
+        return 1
+    fi
+
+    wp_file="$(active_wp_context_file "$wp_id")"
+    if [ -z "$wp_file" ] || [ ! -f "$wp_file" ]; then
+        record_error "Ecosystem Repair Gate: не найден WP context file для $wp_id"
+        return 1
+    fi
+
+    grep -Eq 'Upstream Церена|Церен / upstream' "$wp_file" || record_error "Ecosystem Repair Gate: в $wp_id нет шага 'Церен / upstream'"
+    grep -Eq 'Наш идеал' "$wp_file" || record_error "Ecosystem Repair Gate: в $wp_id нет шага 'Наш идеал'"
+    grep -Eq 'Наш факт' "$wp_file" || record_error "Ecosystem Repair Gate: в $wp_id нет шага 'Наш факт'"
+    grep -Eq 'Gap|Разрыв' "$wp_file" || record_error "Ecosystem Repair Gate: в $wp_id нет шага 'Разрыв / Gap'"
+    grep -Eq 'минимальн|bounded|Решение по текущему фиксу' "$wp_file" || record_error "Ecosystem Repair Gate: в $wp_id нет шага 'минимальный bounded фикс'"
 }
 
 record_error() {
@@ -609,6 +664,7 @@ log "Закрытие задачи: $DESCRIPTION"
 
 verify_sensitive_wp_gate
 verify_active_wp_dirty_scope
+verify_ecosystem_repair_ritual
 if [ ${#ERRORS[@]} -gt 0 ]; then
     echo ""
     echo "❌ ЗАДАЧА НЕ ЗАКРЫТА"
