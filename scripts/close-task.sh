@@ -45,6 +45,7 @@ fi
 eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
 
 SESSION_CONTEXT="$DS_STRATEGY_DIR/current/SESSION-CONTEXT.md"
+ACTIVE_WP_FILE="$DS_STRATEGY_DIR/current/ACTIVE-WP.md"
 LOG="$HOME/Library/Logs/close-task.log"
 CLAUDE_PROJECT_SLUG="$(echo "$WORKSPACE_DIR" | tr '/' '-')"
 BRAIN_DIR="$HOME/.claude/projects/$CLAUDE_PROJECT_SLUG/memory"
@@ -82,6 +83,136 @@ scope_has_repo() {
     local repo_name="$1"
     [ "$SCOPED_CLOSE" -eq 1 ] || return 0
     awk -F '\t' -v repo="$repo_name" '$1 == repo { found=1 } END { exit found ? 0 : 1 }' "$SCOPE_FILE"
+}
+
+is_sensitive_repo() {
+    case "$1" in
+        DS-strategy|FMT-exocortex-template)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+active_wp_is_approved() {
+    [ -f "$ACTIVE_WP_FILE" ] || return 1
+    grep -Eq '^approved:[[:space:]]*true[[:space:]]*$' "$ACTIVE_WP_FILE"
+}
+
+active_wp_scope_matches() {
+    local repo_name="$1"
+    local changed_path="$2"
+    local scope_repo scope_path item
+
+    [ -f "$ACTIVE_WP_FILE" ] || return 1
+
+    while IFS= read -r item; do
+        item="${item#*- }"
+        item="${item%\"}"
+        item="${item#\"}"
+        item="${item%\'}"
+        item="${item#\'}"
+        scope_repo="${item%%:*}"
+        scope_path="${item#*:}"
+
+        [ "$scope_repo" = "$repo_name" ] || continue
+        if [ "$scope_path" = "*" ] || [ "$changed_path" = "$scope_path" ]; then
+            return 0
+        fi
+        case "$changed_path" in
+            "$scope_path"/*)
+                return 0
+                ;;
+        esac
+        case "$scope_path" in
+            */)
+                case "$changed_path" in
+                    "$scope_path"*)
+                        return 0
+                        ;;
+                esac
+                ;;
+        esac
+    done < <(sed -n '/^sensitive_scope:/,/^[^[:space:]-]/p' "$ACTIVE_WP_FILE" | grep '^[[:space:]]*- ' || true)
+
+    return 1
+}
+
+changed_paths_for_repo() {
+    local repo="$1"
+    local line path
+
+    git -C "$repo" -c core.quotePath=false status --porcelain | while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        path="${line:3}"
+        case "$path" in
+            *" -> "*) path="${path##* -> }" ;;
+        esac
+        path="${path%\"}"
+        path="${path#\"}"
+        printf '%s\n' "$path"
+    done
+}
+
+root_helper_source_for() {
+    case "$1" in
+        Codex-Github.code-workspace|close-task.sh|open-codex-github.sh|strategist-wrapper.sh)
+            printf '%s\n' "$FMT_EXOCORTEX_DIR/scripts/$1"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+verify_sensitive_wp_gate() {
+    local required=()
+    local repo repo_name changed_path helper installed source item scope_repo scope_path
+
+    for repo in "${REPOS[@]}"; do
+        [ -d "$repo/.git" ] || continue
+        repo_name=$(basename "$repo")
+        is_sensitive_repo "$repo_name" || continue
+        while IFS= read -r changed_path; do
+            [ -n "$changed_path" ] || continue
+            required+=("$repo_name"$'\t'"$changed_path")
+        done < <(changed_paths_for_repo "$repo")
+    done
+
+    for helper in Codex-Github.code-workspace close-task.sh open-codex-github.sh strategist-wrapper.sh; do
+        installed="$WORKSPACE_DIR/$helper"
+        source="$(root_helper_source_for "$helper" 2>/dev/null || true)"
+        [ -n "$source" ] || continue
+        [ -f "$installed" ] || continue
+        [ -f "$source" ] || continue
+        if ! cmp -s "$installed" "$source"; then
+            required+=("workspace-root"$'\t'"$helper")
+        fi
+    done
+
+    [ ${#required[@]} -gt 0 ] || return 0
+
+    if ! active_wp_is_approved; then
+        record_error "Sensitive WP Gate: найдены чувствительные изменения, но нет approved ACTIVE-WP.md ($ACTIVE_WP_FILE)"
+        for item in "${required[@]}"; do
+            scope_repo="${item%%$'\t'*}"
+            scope_path="${item#*$'\t'}"
+            record_error "Sensitive WP Gate: требует РП scope — $scope_repo:$scope_path"
+        done
+        return 1
+    fi
+
+    for item in "${required[@]}"; do
+        scope_repo="${item%%$'\t'*}"
+        scope_path="${item#*$'\t'}"
+        if ! active_wp_scope_matches "$scope_repo" "$scope_path"; then
+            record_error "Sensitive WP Gate: ACTIVE-WP.md не покрывает изменение $scope_repo:$scope_path"
+        fi
+    done
+
+    return 0
 }
 
 record_error() {
@@ -434,6 +565,20 @@ sync_generated_changes() {
 
 log "Закрытие задачи: $DESCRIPTION"
 [ "$SCOPED_CLOSE" -eq 1 ] && log "Scoped close enabled: $SCOPE_FILE"
+
+if ! verify_sensitive_wp_gate || [ ${#ERRORS[@]} -gt 0 ]; then
+    echo ""
+    echo "❌ ЗАДАЧА НЕ ЗАКРЫТА"
+    echo "📝 Что сделано: $DESCRIPTION"
+    echo "🚫 Что не выполнено:"
+    for error in "${ERRORS[@]}"; do
+        echo "- $error"
+    done
+    echo "💾 Что реально запушено: ничего"
+    echo "🔜 Следующий шаг: открыть/согласовать ACTIVE-WP.md или сузить scope"
+    echo ""
+    exit 1
+fi
 
 run_git_close_pass
 
