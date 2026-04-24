@@ -233,7 +233,7 @@ verify_sensitive_wp_gate() {
                 if ! git -C "$repo" diff --quiet -- "$scoped_path" 2>/dev/null || ! git -C "$repo" diff --cached --quiet -- "$scoped_path" 2>/dev/null || [ -n "$(git -C "$repo" ls-files --others --exclude-standard -- "$scoped_path" 2>/dev/null)" ]; then
                     required+=("$repo_name"$'\t'"$scoped_path")
                     case "$repo_name:$scoped_path" in
-                        FMT-exocortex-template:*|DS-strategy:exocortex/*|DS-strategy:current/ACTIVE-WP.md)
+                        FMT-exocortex-template:*|DS-strategy:exocortex/*)
                             ECOSYSTEM_REPAIR_SCOPE=1
                             ;;
                     esac
@@ -244,7 +244,7 @@ verify_sensitive_wp_gate() {
                 [ -n "$changed_path" ] || continue
                 required+=("$repo_name"$'\t'"$changed_path")
                 case "$repo_name:$changed_path" in
-                    FMT-exocortex-template:*|DS-strategy:exocortex/*|DS-strategy:current/ACTIVE-WP.md)
+                    FMT-exocortex-template:*|DS-strategy:exocortex/*)
                         ECOSYSTEM_REPAIR_SCOPE=1
                         ;;
                 esac
