@@ -477,15 +477,22 @@ for f in "${NEW_FILES[@]}" "${UPDATED_FILES[@]}"; do
     fi
 done
 
-# Copy platform close-task entrypoint to workspace root.
-# Source-of-truth lives in FMT-exocortex-template/scripts/close-task.sh;
-# workspace root keeps an executable installed copy for the agent ritual.
+# Copy platform root entrypoints to workspace root.
+# Source-of-truth lives in FMT-exocortex-template/scripts/;
+# workspace root keeps installed copies for agent rituals and local launchers.
 for f in "${NEW_FILES[@]}" "${UPDATED_FILES[@]}"; do
-    if [ "$f" = "scripts/close-task.sh" ]; then
-        cp "$SCRIPT_DIR/$f" "$WORKSPACE_DIR/close-task.sh"
-        chmod +x "$WORKSPACE_DIR/close-task.sh"
-        echo "  ✓ $WORKSPACE_DIR/close-task.sh обновлён"
-    fi
+    case "$f" in
+        scripts/close-task.sh|scripts/open-codex-github.sh|scripts/strategist-wrapper.sh)
+            helper_name="$(basename "$f")"
+            cp "$SCRIPT_DIR/$f" "$WORKSPACE_DIR/$helper_name"
+            chmod +x "$WORKSPACE_DIR/$helper_name"
+            echo "  ✓ $WORKSPACE_DIR/$helper_name обновлён"
+            ;;
+        scripts/Codex-Github.code-workspace)
+            cp "$SCRIPT_DIR/$f" "$WORKSPACE_DIR/Codex-Github.code-workspace"
+            echo "  ✓ $WORKSPACE_DIR/Codex-Github.code-workspace обновлён"
+            ;;
+    esac
 done
 
 # Copy memory files to Claude projects directory

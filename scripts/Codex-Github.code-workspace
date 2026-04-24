@@ -1,0 +1,11 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "workbench.startupEditor": "none",
+    "window.restoreWindows": "all"
+  }
+}

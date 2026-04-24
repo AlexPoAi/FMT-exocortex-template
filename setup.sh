@@ -292,15 +292,24 @@ echo "[2/6] Installing platform root files..."
 if $DRY_RUN; then
     echo "  [DRY RUN] Would copy: $TEMPLATE_DIR/CLAUDE.md → $WORKSPACE_DIR/CLAUDE.md"
     echo "  [DRY RUN] Would copy: $TEMPLATE_DIR/scripts/close-task.sh → $WORKSPACE_DIR/close-task.sh"
+    echo "  [DRY RUN] Would copy: $TEMPLATE_DIR/scripts/open-codex-github.sh → $WORKSPACE_DIR/open-codex-github.sh"
+    echo "  [DRY RUN] Would copy: $TEMPLATE_DIR/scripts/strategist-wrapper.sh → $WORKSPACE_DIR/strategist-wrapper.sh"
+    echo "  [DRY RUN] Would copy: $TEMPLATE_DIR/scripts/Codex-Github.code-workspace → $WORKSPACE_DIR/Codex-Github.code-workspace"
 else
     cp "$TEMPLATE_DIR/CLAUDE.md" "$WORKSPACE_DIR/CLAUDE.md"
     echo "  Copied to $WORKSPACE_DIR/CLAUDE.md"
-    if [ -f "$TEMPLATE_DIR/scripts/close-task.sh" ]; then
-        cp "$TEMPLATE_DIR/scripts/close-task.sh" "$WORKSPACE_DIR/close-task.sh"
-        chmod +x "$WORKSPACE_DIR/close-task.sh"
-        echo "  Copied to $WORKSPACE_DIR/close-task.sh"
-    else
-        echo "  WARN: scripts/close-task.sh not found in template."
+    for helper in close-task.sh open-codex-github.sh strategist-wrapper.sh; do
+        if [ -f "$TEMPLATE_DIR/scripts/$helper" ]; then
+            cp "$TEMPLATE_DIR/scripts/$helper" "$WORKSPACE_DIR/$helper"
+            chmod +x "$WORKSPACE_DIR/$helper"
+            echo "  Copied to $WORKSPACE_DIR/$helper"
+        else
+            echo "  WARN: scripts/$helper not found in template."
+        fi
+    done
+    if [ -f "$TEMPLATE_DIR/scripts/Codex-Github.code-workspace" ]; then
+        cp "$TEMPLATE_DIR/scripts/Codex-Github.code-workspace" "$WORKSPACE_DIR/Codex-Github.code-workspace"
+        echo "  Copied to $WORKSPACE_DIR/Codex-Github.code-workspace"
     fi
 fi
 
