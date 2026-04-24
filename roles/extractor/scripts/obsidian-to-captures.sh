@@ -11,8 +11,14 @@
 
 set -euo pipefail
 
-NOCLOUD_DIR="${HOME}/Documents/creativ-convector.nocloud"
-INBOX_DIR="${NOCLOUD_DIR}/1. Исчезающие заметки"
+OBSIDIAN_VAULT_DIR="${OBSIDIAN_VAULT_DIR:-${HOME}/Documents/Творческий конвеер}"
+LEGACY_NOCLOUD_DIR="${HOME}/Documents/creativ-convector.nocloud"
+
+if [ ! -d "$OBSIDIAN_VAULT_DIR" ] && [ -d "$LEGACY_NOCLOUD_DIR" ]; then
+    OBSIDIAN_VAULT_DIR="$LEGACY_NOCLOUD_DIR"
+fi
+
+INBOX_DIR="${OBSIDIAN_VAULT_DIR}/1. Исчезающие заметки"
 CAPTURES_FILE="${HOME}/Github/DS-strategy/inbox/captures.md"
 DS_STRATEGY_DIR="${HOME}/Github/DS-strategy"
 LOG_DIR="${HOME}/logs/extractor"
@@ -63,6 +69,12 @@ while IFS= read -r -d '' FILE; do
 
     # Заголовок — имя файла без расширения
     TITLE="${FILENAME%.md}"
+
+    if grep -Fq "### ${TITLE} [source: Obsidian" "$CAPTURES_FILE"; then
+        log "Пропускаем (уже есть capture с таким заголовком): $FILENAME"
+        echo "$DATE" > "$MARKER_FILE"
+        continue
+    fi
 
     log "Добавляем в captures: $FILENAME"
 
