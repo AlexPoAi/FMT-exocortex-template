@@ -107,6 +107,7 @@
     {"path": "roles/verifier/prompts/verify-pack-entity.md"},
     {"path": "roles/verifier/prompts/verify-wp-acceptance.md"},
     {"path": "roles/verifier/role.yaml"},
+    {"path": "scripts/close-task.sh"},
     {"path": "scripts/day-close.sh"},
     {"path": "scripts/day-close-safe.sh"},
     {"path": "setup.sh"},

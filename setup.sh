@@ -287,13 +287,21 @@ else
     echo "  Repo name unchanged ($CURRENT_DIR_NAME)."
 fi
 
-# === 2. Copy CLAUDE.md to workspace root ===
-echo "[2/6] Installing CLAUDE.md..."
+# === 2. Copy platform root files to workspace root ===
+echo "[2/6] Installing platform root files..."
 if $DRY_RUN; then
     echo "  [DRY RUN] Would copy: $TEMPLATE_DIR/CLAUDE.md → $WORKSPACE_DIR/CLAUDE.md"
+    echo "  [DRY RUN] Would copy: $TEMPLATE_DIR/scripts/close-task.sh → $WORKSPACE_DIR/close-task.sh"
 else
     cp "$TEMPLATE_DIR/CLAUDE.md" "$WORKSPACE_DIR/CLAUDE.md"
     echo "  Copied to $WORKSPACE_DIR/CLAUDE.md"
+    if [ -f "$TEMPLATE_DIR/scripts/close-task.sh" ]; then
+        cp "$TEMPLATE_DIR/scripts/close-task.sh" "$WORKSPACE_DIR/close-task.sh"
+        chmod +x "$WORKSPACE_DIR/close-task.sh"
+        echo "  Copied to $WORKSPACE_DIR/close-task.sh"
+    else
+        echo "  WARN: scripts/close-task.sh not found in template."
+    fi
 fi
 
 # === 3. Copy memory to Claude projects directory ===

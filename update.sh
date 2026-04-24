@@ -477,6 +477,17 @@ for f in "${NEW_FILES[@]}" "${UPDATED_FILES[@]}"; do
     fi
 done
 
+# Copy platform close-task entrypoint to workspace root.
+# Source-of-truth lives in FMT-exocortex-template/scripts/close-task.sh;
+# workspace root keeps an executable installed copy for the agent ritual.
+for f in "${NEW_FILES[@]}" "${UPDATED_FILES[@]}"; do
+    if [ "$f" = "scripts/close-task.sh" ]; then
+        cp "$SCRIPT_DIR/$f" "$WORKSPACE_DIR/close-task.sh"
+        chmod +x "$WORKSPACE_DIR/close-task.sh"
+        echo "  ✓ $WORKSPACE_DIR/close-task.sh обновлён"
+    fi
+done
+
 # Copy memory files to Claude projects directory
 CLAUDE_PROJECT_SLUG="$(echo "$WORKSPACE_DIR" | tr '/' '-')"
 CLAUDE_MEMORY_DIR="$HOME/.claude/projects/$CLAUDE_PROJECT_SLUG/memory"
