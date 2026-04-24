@@ -163,6 +163,24 @@ active_wp_scope_matches() {
     return 1
 }
 
+verify_active_wp_dirty_scope() {
+    local repo repo_name changed_path
+
+    [ "$SCOPED_CLOSE" -eq 0 ] || return 0
+    active_wp_is_approved || return 0
+
+    for repo in "${REPOS[@]}"; do
+        [ -d "$repo/.git" ] || continue
+        repo_name=$(basename "$repo")
+        while IFS= read -r changed_path; do
+            [ -n "$changed_path" ] || continue
+            if ! active_wp_scope_matches "$repo_name" "$changed_path"; then
+                record_error "Active WP Scope Gate: dirty path вне ACTIVE-WP scope — $repo_name:$changed_path"
+            fi
+        done < <(changed_paths_for_repo "$repo")
+    done
+}
+
 changed_paths_for_repo() {
     local repo="$1"
     local line path
@@ -589,7 +607,9 @@ sync_generated_changes() {
 log "Закрытие задачи: $DESCRIPTION"
 [ "$SCOPED_CLOSE" -eq 1 ] && log "Scoped close enabled: $SCOPE_FILE"
 
-if ! verify_sensitive_wp_gate || [ ${#ERRORS[@]} -gt 0 ]; then
+verify_sensitive_wp_gate
+verify_active_wp_dirty_scope
+if [ ${#ERRORS[@]} -gt 0 ]; then
     echo ""
     echo "❌ ЗАДАЧА НЕ ЗАКРЫТА"
     echo "📝 Что сделано: $DESCRIPTION"
