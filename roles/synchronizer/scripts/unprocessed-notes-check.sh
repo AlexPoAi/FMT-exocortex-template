@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-CONVECTOR_DIR="$HOME/Github/creativ-convector"
+CONVECTOR_DIR="${OBSIDIAN_VAULT_DIR:-$HOME/Documents/Творческий конвеер}"
 REPORT_FILE="$HOME/Github/DS-strategy/current/UNPROCESSED-NOTES-REPORT.md"
 INBOX_TASKS_FILE="$HOME/Github/DS-strategy/inbox/INBOX-TASKS.md"
 STATE_DIR="$HOME/.local/state/exocortex"
@@ -26,9 +26,9 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [unprocessed-check] $1"
 }
 
-# Проверить существование творческого конвейера
+# Проверить существование Obsidian vault
 if [ ! -d "$CONVECTOR_DIR" ]; then
-    log "ERROR: creativ-convector не найден в $CONVECTOR_DIR"
+    log "ERROR: Obsidian vault не найден в $CONVECTOR_DIR"
     exit 1
 fi
 

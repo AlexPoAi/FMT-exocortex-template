@@ -24,7 +24,7 @@
 с паттерном `Сессия стратегирования YYYY-MM-DD_HH-MM.md`.
 
 Если pending-sessions пустой — ищи в:
-`{{HOME_DIR}}/Documents/creativ-convector.nocloud/System/Сессии стратегирования/`
+`{{HOME_DIR}}/Documents/Творческий конвеер/System/Сессии стратегирования/`
 последний необработанный файл (нет метки `[tasks-extracted]`).
 
 Прочитай файл полностью.
@@ -92,7 +92,7 @@
 
 ### Шаг 5: Пометить сессию как обработанную
 
-Если файл сессии в `{{HOME_DIR}}/Documents/creativ-convector.nocloud/System/Сессии стратегирования/`,
+Если файл сессии в `{{HOME_DIR}}/Documents/Творческий конвеер/System/Сессии стратегирования/`,
 добавь метку `[tasks-extracted YYYY-MM-DD]` в первую строку файла.
 
 Если файл в `pending-sessions/` — пометь аналогично.

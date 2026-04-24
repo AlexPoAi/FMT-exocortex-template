@@ -4,7 +4,7 @@
 
 SESSION_FILE="${1:-}"
 DS_STRATEGY="$HOME/Github/DS-strategy"
-CREATIV="$HOME/Github/creativ-convector"
+CREATIV="${OBSIDIAN_VAULT_DIR:-$HOME/Documents/Творческий конвеер}"
 CAPTURES="$DS_STRATEGY/inbox/captures.md"
 INBOX_TASKS="$DS_STRATEGY/inbox/INBOX-TASKS.md"
 PROCESSED="$DS_STRATEGY/inbox/processed-sessions"
@@ -95,7 +95,7 @@ if [ -f "$INBOX_TASKS" ]; then
 fi
 out ""
 out "⑤ MANUAL-REVIEW / НЕРАЗОБРАННОЕ"
-out "   • Ручной разбор в creativ-convector: $manual_review_count"
+out "   • Ручной разбор в Obsidian vault: $manual_review_count"
 if [ "$manual_review_count" -gt 0 ]; then
     find "$MANUAL_REVIEW" -type f -name '*.md' 2>/dev/null | sort | head -10 | while read -r file; do
         rel_path=${file#"$CREATIV/"}

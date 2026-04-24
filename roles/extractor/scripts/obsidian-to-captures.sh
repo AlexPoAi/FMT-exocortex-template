@@ -12,12 +12,6 @@
 set -euo pipefail
 
 OBSIDIAN_VAULT_DIR="${OBSIDIAN_VAULT_DIR:-${HOME}/Documents/Творческий конвеер}"
-LEGACY_NOCLOUD_DIR="${HOME}/Documents/creativ-convector.nocloud"
-
-if [ ! -d "$OBSIDIAN_VAULT_DIR" ] && [ -d "$LEGACY_NOCLOUD_DIR" ]; then
-    OBSIDIAN_VAULT_DIR="$LEGACY_NOCLOUD_DIR"
-fi
-
 INBOX_DIR="${OBSIDIAN_VAULT_DIR}/1. Исчезающие заметки"
 CAPTURES_FILE="${HOME}/Github/DS-strategy/inbox/captures.md"
 DS_STRATEGY_DIR="${HOME}/Github/DS-strategy"
