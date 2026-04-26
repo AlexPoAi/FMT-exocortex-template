@@ -454,6 +454,22 @@ If there are no pending captures, finish with: NO_PENDING_CAPTURES"
 $extra_args"
     fi
 
+    log "Starting process: $command_file"
+    log "Command file: $command_path"
+
+    cd "$WORKSPACE"
+    unset CLAUDECODE
+
+    AI_CLI_PROVIDER_PRIMARY="$(resolve_provider_primary_choice)"
+    log "Provider primary resolved for $command_file: $AI_CLI_PROVIDER_PRIMARY"
+
+    if [ "$AI_CLI_PROVIDER_PRIMARY" = "codex" ] && resolve_codex_path >/dev/null 2>&1; then
+        if run_codex_provider "$command_file" "$prompt" "primary_provider"; then
+            return 0
+        fi
+        log "WARN: Codex primary failed for $command_file — falling back to Claude provider"
+    fi
+
     local resolved_cli
     resolved_cli=$(resolve_claude_path) || {
         log "ERROR: Claude-compatible CLI not found"
@@ -473,21 +489,6 @@ $extra_args"
         fi
         notify "🔴 Экзокортекс: preflight failed" "Extractor/$command_file не стартовал: проверь helper/env и Claude-compatible CLI path"
         return "$code"
-    fi
-
-    log "Starting process: $command_file"
-    log "Command file: $command_path"
-
-    cd "$WORKSPACE"
-    unset CLAUDECODE
-
-    AI_CLI_PROVIDER_PRIMARY="$(resolve_provider_primary_choice)"
-
-    if uses_codex_as_primary; then
-        if run_codex_provider "$command_file" "$prompt" "primary_provider"; then
-            return 0
-        fi
-        log "WARN: Codex primary failed for $command_file — falling back to Claude provider"
     fi
 
     log "Claude-compatible path: $resolved_cli"
