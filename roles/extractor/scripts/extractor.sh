@@ -212,14 +212,36 @@ resolve_claude_path() {
 }
 
 resolve_codex_path() {
-    if [ -n "${CODEX_PATH:-}" ] && [ -x "${CODEX_PATH}" ]; then
-        echo "$CODEX_PATH"
-        return
+    local candidate
+
+    if [ -n "${CODEX_PATH:-}" ] && [ -x "${CODEX_PATH:-}" ]; then
+        printf '%s\n' "$CODEX_PATH"
+        return 0
     fi
-    if command -v codex >/dev/null 2>&1; then
-        command -v codex
-        return
+
+    candidate=$(command -v codex 2>/dev/null || true)
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
     fi
+
+    for candidate in \
+        "/Applications/Codex.app/Contents/Resources/codex" \
+        "/usr/local/bin/codex" \
+        "/opt/homebrew/bin/codex" \
+        "$HOME/.local/bin/codex"; do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    candidate=$(find "$HOME/.vscode/extensions" -maxdepth 5 -type f -name codex 2>/dev/null | sort | tail -n 1)
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
     return 1
 }
 
