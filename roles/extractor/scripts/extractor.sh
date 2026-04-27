@@ -253,15 +253,29 @@ uses_codex_as_primary() {
     [ "${AI_CLI_PROVIDER_PRIMARY}" = "codex" ] && resolve_codex_path >/dev/null 2>&1
 }
 
+load_runtime_arbiter_env() {
+    local tmp_env
+
+    [ -x "$RUNTIME_ARBITER_PATH" ] || return 1
+
+    tmp_env=$(mktemp)
+    if ! bash "$RUNTIME_ARBITER_PATH" --env >"$tmp_env"; then
+        rm -f "$tmp_env"
+        return 1
+    fi
+
+    # shellcheck disable=SC1090
+    source "$tmp_env"
+    rm -f "$tmp_env"
+}
+
 resolve_provider_primary_choice() {
     if [ "${AI_CLI_PROVIDER_PRIMARY}" != "auto" ]; then
         printf '%s\n' "$AI_CLI_PROVIDER_PRIMARY"
         return
     fi
 
-    if [ -x "$RUNTIME_ARBITER_PATH" ]; then
-        # shellcheck disable=SC1090
-        source <(bash "$RUNTIME_ARBITER_PATH" --env)
+    if load_runtime_arbiter_env; then
         if [ -n "${AI_CLI_PROVIDER_PRIMARY_RESOLVED:-}" ] && [ "$AI_CLI_PROVIDER_PRIMARY_RESOLVED" != "unavailable" ]; then
             printf '%s\n' "$AI_CLI_PROVIDER_PRIMARY_RESOLVED"
             return
