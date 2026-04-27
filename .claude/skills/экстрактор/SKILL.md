@@ -7,3 +7,9 @@ argument-hint: "[дата отчёта, если не последний]"
 Выполни промпт `roles/extractor/prompts/apply-ke-report.md` из `{{WORKSPACE_DIR}}/FMT-exocortex-template/`.
 
 Аргументы: $ARGUMENTS
+
+Перед применением отчёта держи discipline gate:
+- не применять `pack_candidates` без readback исходного extraction-report;
+- не создавать Pack-артефакты "на будущее";
+- сохранять только bounded candidates из отчёта;
+- проверять diff/status и список применённых кандидатов.
