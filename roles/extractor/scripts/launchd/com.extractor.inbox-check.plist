@@ -35,6 +35,6 @@
     </dict>
 
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
 </dict>
 </plist>
