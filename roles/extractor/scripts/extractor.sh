@@ -456,8 +456,9 @@ Create/update required artifacts now.
 If there are no pending captures, finish with: NO_PENDING_CAPTURES"
     else
         prompt=$(cat "$command_path")
-        # Resolve workspace placeholder for deterministic execution.
+        # Resolve path placeholders for deterministic execution in non-interactive runners.
         prompt="${prompt//'{{WORKSPACE_DIR}}'/$WORKSPACE}"
+        prompt="${prompt//'{{HOME_DIR}}'/$HOME}"
     fi
 
     if [ -n "$extra_args" ]; then
@@ -713,9 +714,66 @@ verify_inbox_check_outputs() {
     return 0
 }
 
+append_hot_capture() {
+    local title="$1"
+    local domain="$2"
+    local type="$3"
+    local content="$4"
+    local source="${5:-Hot Capture}"
+    local captures_file="$WORKSPACE/DS-strategy/inbox/captures.md"
+    local marker="<!-- Captures добавляются ниже этой строки -->"
+    local tmp_file insert_file
+
+    if [ ! -f "$captures_file" ]; then
+        log "ERROR: captures.md not found for hot-capture: $captures_file"
+        return 21
+    fi
+
+    if ! grep -Fq "$marker" "$captures_file"; then
+        log "ERROR: captures.md marker not found for hot-capture"
+        return 22
+    fi
+
+    if grep -Fq "### $title [source:" "$captures_file"; then
+        log "SKIP: hot-capture already exists: $title"
+        return 0
+    fi
+
+    tmp_file=$(mktemp)
+    insert_file=$(mktemp)
+    cat > "$insert_file" <<EOF
+
+### ${title} [source: ${source} ${DATE}]
+**Домен:** ${domain}
+**Тип:** ${type}
+**Контент:**
+${content}
+
+EOF
+    awk -v marker="$marker" -v insert_file="$insert_file" '
+        { print }
+        $0 == marker {
+            while ((getline line < insert_file) > 0) {
+                print line
+            }
+            close(insert_file)
+        }
+    ' "$captures_file" > "$tmp_file"
+    rm -f "$insert_file"
+    mv "$tmp_file" "$captures_file"
+    log "Hot capture appended: $title -> $domain/$type"
+}
+
 load_env
 
 case "${1:-}" in
+    "hot-capture")
+        if [ $# -lt 5 ]; then
+            echo "Usage: $0 hot-capture <title> <domain> <type> <content> [source]"
+            exit 2
+        fi
+        append_hot_capture "$2" "$3" "$4" "$5" "${6:-Hot Capture}"
+        ;;
     "inbox-check")
         SCENARIO_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
         if ! is_work_hours; then
@@ -731,13 +789,19 @@ case "${1:-}" in
 
         CAPTURES_FILE="$WORKSPACE/DS-strategy/inbox/captures.md"
         if [ -f "$CAPTURES_FILE" ]; then
-            PENDING=$(grep -c '^### ' "$CAPTURES_FILE" 2>/dev/null) || PENDING=0
-            PROCESSED=$(grep -c '\[processed' "$CAPTURES_FILE" 2>/dev/null) || PROCESSED=0
-            ANALYZED=$(grep -c '\[analyzed' "$CAPTURES_FILE" 2>/dev/null) || ANALYZED=0
-            ACTUAL_PENDING=$((PENDING - PROCESSED - ANALYZED))
+            # Upstream WP-273 pattern: status markers are counted only on capture headers.
+            # Grepping the full file can count quoted/status text in content and create false pending math.
+            capture_headers=$(grep -E '^### ' "$CAPTURES_FILE" 2>/dev/null | grep -vE '^### \[Название знания\]$' || true)
+            TOTAL_CAPTURES=$(printf '%s\n' "$capture_headers" | sed '/^$/d' | wc -l | tr -d ' ') || TOTAL_CAPTURES=0
+            PROCESSED=$(grep -E '^### .*\[processed([][:space:]]|$)' "$CAPTURES_FILE" 2>/dev/null | wc -l | tr -d ' ') || PROCESSED=0
+            ANALYZED=$(grep -E '^### .*\[analyzed([][:space:]]|$)' "$CAPTURES_FILE" 2>/dev/null | wc -l | tr -d ' ') || ANALYZED=0
+            DUPLICATE=$(grep -E '^### .*\[duplicate([][:space:]]|$)' "$CAPTURES_FILE" 2>/dev/null | wc -l | tr -d ' ') || DUPLICATE=0
+            DEFERRED=$(grep -E '^### .*\[defer([][:space:]]|$)' "$CAPTURES_FILE" 2>/dev/null | wc -l | tr -d ' ') || DEFERRED=0
+            REJECTED=$(grep -E '^### .*\[rejected([][:space:]]|$)' "$CAPTURES_FILE" 2>/dev/null | wc -l | tr -d ' ') || REJECTED=0
+            ACTUAL_PENDING=$(printf '%s\n' "$capture_headers" | grep -vE '\[(analyzed|processed|duplicate|defer|rejected)([][:space:]]|$)' | sed '/^$/d' | wc -l | tr -d ' ') || ACTUAL_PENDING=0
 
             if [ "$ACTUAL_PENDING" -le 0 ]; then
-                log "SKIP: No pending captures in inbox (total=$PENDING, processed=$PROCESSED, analyzed=$ANALYZED)"
+                log "SKIP: No pending captures in inbox (total=$TOTAL_CAPTURES, processed=$PROCESSED, analyzed=$ANALYZED, duplicate=$DUPLICATE, defer=$DEFERRED, rejected=$REJECTED)"
                 write_status_artifact "extractor-inbox-check" "success" "0" "no pending captures in inbox" "verified" "runner checked inbox and found nothing pending" "" "true"
                 exit 0
             fi

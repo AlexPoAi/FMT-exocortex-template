@@ -20,6 +20,7 @@
 |----------|---------|-------|
 | **Session-Close** | Закрытие сессии (протокол Close) | Интерактивный |
 | **On-Demand** | «Запиши это в Pack» | Интерактивный |
+| **Hot-Capture** | Рубеж работы: паттерн / решение / ошибка | Механическая запись в `captures.md` |
 | **Knowledge Audit** | «Аудит Pack» / ежемесячно | Интерактивный |
 | **Inbox-Check** | launchd каждые 3ч (опционально) | Headless (отчёт) |
 
@@ -66,6 +67,10 @@ bash {{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/scripts/extractor.
 
 # Knowledge Audit
 bash {{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/scripts/extractor.sh audit
+
+# Hot capture на рубеже работы
+bash {{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/scripts/extractor.sh hot-capture \
+  "Название знания" "Домен" "method" "Текст знания" "Agent"
 ```
 
 ## Как работает
