@@ -5,7 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RESOLVE_WORKSPACE_SH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/resolve-workspace.sh"
+IWE_TEMPLATE_DIR="${IWE_TEMPLATE:-$HOME/Github/FMT-exocortex-template}"
+RESOLVE_WORKSPACE_SH="$IWE_TEMPLATE_DIR/roles/synchronizer/scripts/resolve-workspace.sh"
 if [ ! -x "$RESOLVE_WORKSPACE_SH" ]; then
     RESOLVE_WORKSPACE_SH="$(cd "$SCRIPT_DIR/../../synchronizer/scripts" && pwd)/resolve-workspace.sh"
 fi
@@ -13,11 +14,20 @@ eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
 
 PENDING_DIR="$WORKSPACE_DIR/DS-strategy/inbox/pending-sessions"
 PROCESSED_DIR="$WORKSPACE_DIR/DS-strategy/inbox/processed-sessions"
-EXTRACTOR="$WORKSPACE_DIR/FMT-exocortex-template/roles/extractor/scripts/extractor.sh"
+ARCHIVE_PROCESSED_DIR="$WORKSPACE_DIR/DS-strategy/archive/notes/processed-sessions"
+OBSIDIAN_VAULT_DIR="${OBSIDIAN_VAULT_DIR:-$HOME/Documents/Творческий конвеер}"
+SESSION_DIR="$OBSIDIAN_VAULT_DIR/Сессия стратегирования"
+LEGACY_SESSION_DIR="$OBSIDIAN_VAULT_DIR/System/Сессии стратегирования"
+if [ -x "${IWE_RUNTIME:-}/roles/extractor/scripts/extractor.sh" ]; then
+    EXTRACTOR="${IWE_RUNTIME}/roles/extractor/scripts/extractor.sh"
+else
+    EXTRACTOR="$WORKSPACE_DIR/FMT-exocortex-template/roles/extractor/scripts/extractor.sh"
+fi
+CHAIN_REPORT="$IWE_TEMPLATE_DIR/roles/extractor/scripts/chain-report.sh"
 LOG_DIR="$HOME/logs/extractor"
 LOG_FILE="$LOG_DIR/$(date +%Y-%m-%d).log"
 
-mkdir -p "$LOG_DIR" "$PROCESSED_DIR"
+mkdir -p "$LOG_DIR" "$PROCESSED_DIR" "$PENDING_DIR"
 
 # Снимаем блокировку вложенных сессий Claude Code
 unset CLAUDECODE
@@ -27,7 +37,54 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [session-watcher] $1"
 }
 
+is_session_candidate() {
+    local fname="$1"
+
+    case "$fname" in
+        "Сессия стратегирования "*.md) ;;
+        *) return 1 ;;
+    esac
+
+    case "$fname" in
+        *"raw input"*.md|*"ОТЧЁТ "*".md"|*"АНАЛИЗ "*".md") return 1 ;;
+    esac
+
+    return 0
+}
+
+queue_obsidian_sessions() {
+    local source_dir="$1"
+    local queued=0
+
+    [ -d "$source_dir" ] || return 0
+
+    while IFS= read -r session_file; do
+        [ -f "$session_file" ] || continue
+        local fname
+        fname=$(basename "$session_file")
+
+        if ! is_session_candidate "$fname"; then
+            continue
+        fi
+
+        if [ -f "$PENDING_DIR/$fname" ] || [ -f "$PROCESSED_DIR/$fname" ] || [ -f "$ARCHIVE_PROCESSED_DIR/$fname" ]; then
+            continue
+        fi
+
+        cp "$session_file" "$PENDING_DIR/$fname"
+        queued=$((queued + 1))
+        log "queued from Obsidian: $fname"
+    done < <(find "$source_dir" -type f -name '*.md' | sort)
+
+    if [ "$queued" -gt 0 ]; then
+        log "queued $queued session file(s) from Obsidian into pending-sessions/"
+    fi
+}
+
 # Проверяем есть ли файлы в очереди. `find` не роняет watcher при пустой очереди.
+queue_obsidian_sessions "$SESSION_DIR"
+queue_obsidian_sessions "$LEGACY_SESSION_DIR"
+
 pending=$(find "$PENDING_DIR" -maxdepth 1 -type f -name "*.md" 2>/dev/null | sort || true)
 if [ -z "$pending" ]; then
     exit 0
@@ -60,5 +117,5 @@ for session_file in "$PENDING_DIR"/*.md; do
 
     mv "$session_file" "$PROCESSED_DIR/$fname"
     log "✅ Готово: $fname → processed-sessions/ (knowledge + tasks)"
-    bash "$(dirname "$0")/chain-report.sh" "$PROCESSED_DIR/$fname" | tee -a "$LOG_FILE"
+    bash "$CHAIN_REPORT" "$PROCESSED_DIR/$fname" | tee -a "$LOG_FILE"
 done

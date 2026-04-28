@@ -7,8 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/scripts/session-watcher.sh</string>
+        <string>{{IWE_RUNTIME}}/roles/extractor/scripts/session-watcher.sh</string>
     </array>
 
     <key>StartInterval</key>
@@ -26,9 +25,15 @@
         <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>HOME</key>
         <string>{{HOME_DIR}}</string>
+        <key>IWE_TEMPLATE</key>
+        <string>{{IWE_TEMPLATE}}</string>
+        <key>IWE_WORKSPACE</key>
+        <string>{{WORKSPACE_DIR}}</string>
+        <key>IWE_RUNTIME</key>
+        <string>{{IWE_RUNTIME}}</string>
     </dict>
 
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
 </dict>
 </plist>

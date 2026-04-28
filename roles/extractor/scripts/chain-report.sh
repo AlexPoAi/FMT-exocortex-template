@@ -10,6 +10,7 @@ INBOX_TASKS="$DS_STRATEGY/inbox/INBOX-TASKS.md"
 PROCESSED="$DS_STRATEGY/inbox/processed-sessions"
 PENDING="$DS_STRATEGY/inbox/pending-sessions"
 REPORTS="$DS_STRATEGY/inbox/extraction-reports"
+BANK_DIR="$CREATIV/Банк экстрактора"
 MANUAL_REVIEW="$CREATIV/2. Черновики/00-Ручной разбор"
 REPORT_FILE="$REPORTS/$(date +%Y-%m-%d)-chain-report.md"
 
@@ -28,7 +29,16 @@ count_md() {
 
 pending_sessions=$(count_md "$PENDING")
 processed_sessions=$(count_md "$PROCESSED")
-manual_review_count=$(find "$MANUAL_REVIEW" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+manual_review_label="Ручной разбор в Obsidian vault"
+if [ -d "$MANUAL_REVIEW" ]; then
+    manual_review_count=$(find "$MANUAL_REVIEW" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+elif [ -d "$BANK_DIR" ]; then
+    manual_review_count=$(find "$BANK_DIR" -maxdepth 1 -type f -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')
+    MANUAL_REVIEW="$BANK_DIR"
+    manual_review_label="Банк экстрактора (human-layer snapshot)"
+else
+    manual_review_count=0
+fi
 pending_reports=$(grep -l '^status: pending-review' "$REPORTS"/*.md 2>/dev/null | wc -l | tr -d ' ')
 pending_captures=0
 processed_captures=0
@@ -94,8 +104,8 @@ if [ -f "$INBOX_TASKS" ]; then
     done
 fi
 out ""
-out "⑤ MANUAL-REVIEW / НЕРАЗОБРАННОЕ"
-out "   • Ручной разбор в Obsidian vault: $manual_review_count"
+out "⑤ HUMAN-LAYER / НЕРАЗОБРАННОЕ"
+out "   • $manual_review_label: $manual_review_count"
 if [ "$manual_review_count" -gt 0 ]; then
     find "$MANUAL_REVIEW" -type f -name '*.md' 2>/dev/null | sort | head -10 | while read -r file; do
         rel_path=${file#"$CREATIV/"}
