@@ -151,7 +151,9 @@ cleanup_state() {
 # Разделяет архивацию (мгновенно) и генерацию (15+ мин Claude Code).
 # Гарантирует: даже если генерация ещё не началась, старый план не висит в current/.
 pre_archive_dayplan() {
-    local strategy_dir="/Users/alexander/Github/{{GOVERNANCE_REPO}}"
+    local workspace_dir="${WORKSPACE_DIR:-${IWE_WORKSPACE:-$HOME/Github}}"
+    local governance_repo="${GOVERNANCE_REPO:-${IWE_GOVERNANCE_REPO:-DS-strategy}}"
+    local strategy_dir="$workspace_dir/$governance_repo"
     local archive_dir="$strategy_dir/archive/day-plans"
     local moved=0
 
