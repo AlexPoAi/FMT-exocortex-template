@@ -16,7 +16,7 @@ Monitors your coding activity via WakaTime and sends a macOS notification when y
 
 ```bash
 # 1. Replace placeholder with your workspace path
-sed "s|{{WORKSPACE_DIR}}|$HOME/IWE|g" setup/optional/pomodoro-alert.plist \
+sed "s|/Users/alexander/Github|$HOME/IWE|g" setup/optional/pomodoro-alert.plist \
   > ~/Library/LaunchAgents/com.exocortex.pomodoro-alert.plist
 
 # 2. Load the agent (starts immediately, runs every 5 min)
@@ -58,7 +58,7 @@ rm ~/Library/LaunchAgents/com.exocortex.pomodoro-alert.plist
 | File | Purpose |
 |------|---------|
 | `pomodoro-alert.py` | Python script (WakaTime API + macOS notification) |
-| `pomodoro-alert.plist` | launchd agent template (replace `{{WORKSPACE_DIR}}`) |
+| `pomodoro-alert.plist` | launchd agent template (replace `/Users/alexander/Github`) |
 
 ---
 
@@ -79,7 +79,7 @@ This file is read by Claude during Day Open (`protocol-open.md § День`). No
 
 IWE автоматика в облаке — работает даже когда Mac выключен. Базовый уровень: backup + health check. $0/мес.
 
-**Сценарий:** [DP.SC.019](../../../PACK-digital-platform/pack/digital-platform/08-use-cases/DP.SC.019-autonomous-cloud-runtime.md)
+**Сценарий:** [DP.SC.019](../../../PACK-digital-platform/pack/digital-platform/08-service-clauses/DP.SC.019-autonomous-cloud-runtime.md)
 
 ### Что делает
 
@@ -115,67 +115,6 @@ bash setup/optional/setup-cloud-scheduler.sh
 |------|---------|
 | `cloud-scheduler.yml` | GitHub Actions workflow (backup + health check) |
 | `setup-cloud-scheduler.sh` | Скрипт настройки (gh secrets + тест) |
-
----
-
-## VPS Agent Runtime (systemd)
-
-Если Mac выключается, этот слой делает `scheduler dispatch` always-on на Linux VPS.
-
-### Что делает
-
-- Ставит `systemd` service+timer для `com.exocortex.scheduler`
-- Запускает `scheduler.sh dispatch` по интервалу (по умолчанию каждые 15 минут)
-- Убирает зависимость от локального `launchd`
-
-### Установка на VPS
-
-```bash
-bash setup/optional/setup-vps-agent-runtime.sh --workspace "$HOME/Github" --interval-minutes 15
-```
-
-### Быстрый deploy с локальной машины
-
-Если SSH к VPS доступен, можно сразу синхронизировать `FMT-exocortex-template` + `DS-strategy` и затем поставить runtime:
-
-```bash
-bash setup/optional/deploy-vps-exocortex-runtime.sh --host root@72.56.4.61 --local-workspace "$HOME/Github" --remote-workspace /root/Github --interval-minutes 15
-```
-
-Этот helper после sync принудительно пишет на VPS:
-
-```bash
-EXOCORTEX_RUNTIME_TARGET=vps
-EXOCORTEX_DISABLE_LOCAL_DISPATCH=0
-```
-
-Чтобы server-side dispatch не унаследовал локальный standby-флаг.
-
-### Проверка
-
-```bash
-sudo systemctl status com.exocortex.scheduler.timer --no-pager
-sudo systemctl list-timers | grep com.exocortex.scheduler
-sudo systemctl start com.exocortex.scheduler.service
-```
-
-### Локальный standby (необязательно)
-
-Чтобы избежать двойных запусков после миграции на VPS, в локальном `DS-strategy/current/SCHEDULER-RUNTIME.env` выставьте:
-
-```bash
-EXOCORTEX_RUNTIME_TARGET=vps
-EXOCORTEX_DISABLE_LOCAL_DISPATCH=1
-```
-
-### Files
-
-| File | Purpose |
-|------|---------|
-| `deploy-vps-exocortex-runtime.sh` | Sync локального workspace на VPS + установка runtime |
-| `setup-vps-agent-runtime.sh` | Установка systemd runtime на VPS |
-| `systemd/com.exocortex.scheduler.service.template` | Service template |
-| `systemd/com.exocortex.scheduler.timer.template` | Timer template |
 
 ---
 

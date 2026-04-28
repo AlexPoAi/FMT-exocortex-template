@@ -7,7 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/strategist/scripts/strategist.sh</string>
+        <string>{{IWE_RUNTIME}}/roles/strategist/scripts/strategist.sh</string>
         <string>week-review</string>
     </array>
 
@@ -22,17 +22,23 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>{{HOME_DIR}}/logs/strategist/launchd-weekreview.log</string>
+    <string>/Users/alexander/logs/strategist/launchd-weekreview.log</string>
 
     <key>StandardErrorPath</key>
-    <string>{{HOME_DIR}}/logs/strategist/launchd-weekreview-error.log</string>
+    <string>/Users/alexander/logs/strategist/launchd-weekreview-error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>HOME</key>
-        <string>{{HOME_DIR}}</string>
+        <string>/Users/alexander</string>
+        <key>IWE_TEMPLATE</key>
+        <string>{{IWE_TEMPLATE}}</string>
+        <key>IWE_WORKSPACE</key>
+        <string>/Users/alexander/Github</string>
+        <key>IWE_RUNTIME</key>
+        <string>{{IWE_RUNTIME}}</string>
     </dict>
 
     <key>RunAtLoad</key>

@@ -14,8 +14,8 @@
 ## Конфигурация
 
 > Перед обработкой прочитай:
-> 1. `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/routing.md` — таблицы маршрутизации (Pack'и, типы, директории)
-> 2. `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/feedback-log.md` — лог отклонённых кандидатов (не предлагай аналогичные)
+> 1. `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/routing.md` — таблицы маршрутизации (Pack'и, типы, директории)
+> 2. `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/feedback-log.md` — лог отклонённых кандидатов (не предлагай аналогичные)
 
 ## Алгоритм
 
@@ -230,8 +230,8 @@ epistemic_stage: emerging
 
 Для каждого кандидата:
 
-1. **MCP-поиск:** `knowledge-mcp search("тема кандидата")` → есть ли похожее в базе?
-2. **MCP-документ:** `knowledge-mcp get_document("целевой файл")` → проверить содержимое (если файл существует)
+1. **MCP-поиск:** `knowledge_search("тема кандидата")` → есть ли похожее в базе?
+2. **MCP-документ:** `knowledge_get_document("целевой файл")` → проверить содержимое (если файл существует)
 3. **Прочитай** существующие сущности в целевой директории Pack'а.
 4. **Прочитай** `01B-distinctions.md` целевого Pack'а — нет ли конфликта.
 5. **Прочитай** `ontology.md` целевого Pack'а (если существует) — согласованы ли типы и термины.
@@ -317,11 +317,11 @@ epistemic_stage: emerging
    - Создай файл (или добавь секцию) **ровно по тексту из «Готовый текст»**
    - Закоммить в соответствующий репо
 3. Для reject — ничего не делай.
-4. Для defer — запиши в `DS-strategy/inbox/` для следующего цикла.
+4. Для defer — запиши в `{{GOVERNANCE_REPO}}/inbox/` для следующего цикла.
 
 ### Шаг 8a: Пометка captures
 
-> После применения accept-кандидатов — пометить обработанные captures в `DS-strategy/inbox/captures.md`.
+> После применения accept-кандидатов — пометить обработанные captures в `{{GOVERNANCE_REPO}}/inbox/captures.md`.
 
 1. Для каждого accept-кандидата, который был взят из `captures.md`:
    - Добавить `[processed YYYY-MM-DD]` к заголовку записи

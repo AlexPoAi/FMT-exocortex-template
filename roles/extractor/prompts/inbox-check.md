@@ -2,7 +2,7 @@
 
 > Source-of-truth: DP.AISYS.013 (PACK-digital-platform). Алгоритм полностью описан ниже.
 > Этот промпт выполняется headless (launchd, каждые 3 часа) или вручную.
-> Режим: **без одобрения** — headless routing и генерация отчёта. Финальная запись в Pack — только в интерактивной сессии.
+> Режим: **без одобрения** — только генерация отчёта. Применение — в интерактивной сессии.
 
 ## Роль
 
@@ -22,14 +22,14 @@
 
 ### Шаг 0: Прочитать конфигурацию
 
-1. Прочитай `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/routing.md` — таблицы маршрутизации.
-2. Прочитай `{{WORKSPACE_DIR}}/FMT-exocortex-template/roles/extractor/config/feedback-log.md` — лог отклонённых кандидатов. Если capture похож на ранее отклонённый → пропусти.
+1. Прочитай `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/routing.md` — таблицы маршрутизации.
+2. Прочитай `/Users/alexander/Github/FMT-exocortex-template/roles/extractor/config/feedback-log.md` — лог отклонённых кандидатов. Если capture похож на ранее отклонённый → пропусти.
 
 ### Шаг 1: Проверить inbox
 
-1. Прочитай `{{WORKSPACE_DIR}}/DS-strategy/inbox/captures.md`
-2. Найди все pending записи: реальные секции `### ...` без статусных меток на той же строке (`[analyzed ...]`, `[processed ...]`, `[duplicate ...]`, `[defer ...]`, `[rejected ...]`). Шаблон из блока «Как добавить capture» (`### [Название знания]`) не считать записью.
-3. Если pending записей нет → напиши в лог `No pending captures in inbox` и **заверши работу**
+1. Прочитай `/Users/alexander/Github/{{GOVERNANCE_REPO}}/inbox/captures.md`
+2. Найди все pending записи: секции `### ...` БЕЗ любого из 4 маркеров статуса на той же строке (`[analyzed]`, `[processed]`, `[duplicate]`, `[defer]`). Если стоит хоть один — capture уже в workflow, пропускай.
+3. Если pending записей нет → сообщение `No pending captures in inbox` выводи через stdout (его поймает `extractor.sh` и запишет в `/Users/alexander/logs/extractor/YYYY-MM-DD.log`). **НЕ создавай отдельный лог-файл** в `{{GOVERNANCE_REPO}}/` или где-либо ещё. Заверши работу.
 4. Если pending > 5 → возьми первые 5 (по порядку в файле)
 
 ### Шаг 2: Обработать каждый capture (max 5)
@@ -53,15 +53,6 @@
 2. Определи директорию по типу
 3. Прочитай `00-pack-manifest.md` ТОЛЬКО целевого Pack'а → проверь bounded context
 
-Если элемент **не является Pack-knowledge**, НЕ отправляй его автоматически в пустой `reject`.
-
-Вместо этого сначала определи outcome:
-- `pack_candidate` — доменное знание, которое должно попасть в Pack
-- `backlog_task` — governance / growth / strategy / implementation task, которая должна попасть в `DS-strategy/inbox/INBOX-TASKS.md`
-- `recovery_item` — элемент, который пока некуда класть напрямую, но его нельзя терять; он должен попасть в `DS-strategy/inbox/RECOVERY-CATALOG-LOST-INPUTS-YYYY-MM-DD.md`
-- `rejected` — шум, тест, пустое сообщение, дубликат без новой ценности
-- `deferred` — нужен ручной выбор маршрута, но элемент не потерян
-
 **2c. Формализация (lazy reading):**
 
 1. Прочитай целевую директорию ТОЛЬКО нужного Pack'а → найди существующие файлы → назначь ID
@@ -74,12 +65,12 @@
 - [ ] Правильная директория?
 - [ ] Нет дубликата?
 - [ ] Соответствует bounded context?
-- [ ] Если это governance/growth/personal input — выбран backlog/recovery route, а не пустой reject
+- [ ] Не governance-контент?
 - [ ] Не похож на паттерн из feedback-log.md?
 
 ### Шаг 3: Сгенерировать Extraction Report
 
-Создай файл отчёта: `{{WORKSPACE_DIR}}/DS-strategy/inbox/extraction-reports/{YYYY-MM-DD}-inbox-check.md`
+Создай файл отчёта: `/Users/alexander/Github/{{GOVERNANCE_REPO}}/inbox/extraction-reports/{YYYY-MM-DD}-inbox-check.md`
 
 Если файл с таким именем уже существует, добавь суффикс: `{YYYY-MM-DD}-inbox-check-2.md`.
 
@@ -98,7 +89,7 @@ remaining: M
 # Extraction Report (Inbox-Check)
 
 **Дата:** {YYYY-MM-DD}
-**Источник:** DS-strategy/inbox/captures.md
+**Источник:** {{GOVERNANCE_REPO}}/inbox/captures.md
 **Обработано captures:** N из {total pending}
 **Осталось:** M
 
@@ -110,12 +101,10 @@ remaining: M
 **Сырой текст:** «{цитата из capture}»
 **Классификация:** {тип}
 
-**Outcome:** pack_candidate / backlog_task / recovery_item / rejected / deferred
-
-**Куда направить:**
-- **Репо/контур:** {Pack / DS-strategy / recovery-catalog / archive}
+**Куда записать:**
+- **Репо:** {путь к Pack}
 - **Файл:** {путь к файлу}
-- **Действие:** создать файл / добавить секцию / создать backlog task / добавить в recovery-catalog / архивировать
+- **Действие:** создать файл / добавить секцию / добавить строки
 
 **Совместимость:**
 - **Результат:** {совместим / уточняет / противоречит / дубликат}
@@ -127,7 +116,7 @@ remaining: M
 {ПОЛНЫЙ текст файла с frontmatter}
 ~~~
 
-**Вердикт:** pack_candidate / backlog_task / recovery_item / rejected / deferred
+**Вердикт:** accept / reject / defer
 **Обоснование:** {почему}
 
 ---
@@ -138,111 +127,44 @@ remaining: M
 |---------|----------|
 | Captures обработано | N |
 | Всего кандидатов | N |
-| Pack candidate | N |
-| Backlog task | N |
-| Recovery item | N |
-| Rejected | N |
-| Deferred | N |
+| Accept | N |
+| Reject | N |
+| Defer | N |
 | Осталось в inbox | M |
 ```
 
-### Шаг 3b: Создать управляемые артефакты по outcome
-
-После генерации отчёта — не оставляй element без route.
-
-#### A. Для каждого `pack_candidate`
-
-Добавь задачу в `{{WORKSPACE_DIR}}/DS-strategy/inbox/INBOX-TASKS.md`.
-
-**Где добавить:** в начало файла, сразу после frontmatter (перед первой задачей).
-
-**Формат задачи:**
-
-```markdown
-- [pending] {YYYY-MM-DD}: [KE] Применить: {заголовок кандидата}
-  - Контекст: Extraction report {YYYY-MM-DD}, кандидат #{N}
-  - Репо: {репо} → {путь к файлу}
-  - Действие: {create file / add section}
-  - Приоритет: medium
-  - Бюджет: 15 мин
-  - Готовый текст: см. `DS-strategy/inbox/extraction-reports/{YYYY-MM-DD}-inbox-check.md` → Кандидат #{N}
-```
-
-**Важно:**
-- Добавляй ТОЛЬКО для `pack_candidate`.
-- Не дублируй: если задача с таким репо+файлом уже есть в INBOX-TASKS → пропусти.
-- Тег `[KE]` в названии — маркер задач Knowledge Extractor.
-
-#### B. Для каждого `backlog_task`
-
-Добавь обычную backlog-задачу в `{{WORKSPACE_DIR}}/DS-strategy/inbox/INBOX-TASKS.md`.
-
-**Формат задачи:**
-
-```markdown
-- [pending] {YYYY-MM-DD}: {краткий заголовок backlog-задачи}
-  - Контекст: extracted from inbox-check {YYYY-MM-DD}, кандидат #{N}
-  - Источник: {capture title}
-  - Outcome: backlog_task
-  - Почему не Pack: {краткое обоснование}
-  - Следующий шаг: {что именно нужно сделать дальше}
-  - Приоритет: medium
-  - Бюджет: 30-60 мин
-```
-
-#### C. Для каждого `recovery_item`
-
-Добавь запись в `{{WORKSPACE_DIR}}/DS-strategy/inbox/RECOVERY-CATALOG-LOST-INPUTS-{YYYY-MM-DD}.md`.
-
-Если каталога за дату ещё нет — создай его.
-
-Минимальные поля записи:
-- элемент
-- источник
-- статус recovery
-- что нужно для возврата в контур
-
 ### Шаг 4: Пометить captures как проанализированные
 
-В `DS-strategy/inbox/captures.md` — для каждого проанализированного capture добавь метку `[analyzed YYYY-MM-DD]` к заголовку:
+В `{{GOVERNANCE_REPO}}/inbox/captures.md` — для каждого проанализированного capture добавь метку `[analyzed YYYY-MM-DD]` к заголовку:
 
 **Было:** `### Паттерн X`
 **Стало:** `### Паттерн X [analyzed 2026-02-12]`
 
 > **ВАЖНО:** НЕ ставить `[processed]`! Метка `[processed]` означает «записано в Pack» и ставится ТОЛЬКО в session-close после подтверждённой записи. `[analyzed]` означает «extraction report создан, ожидает применения».
 
-### Шаг 4b: Rejected captures → Archive
-
-Для каждого capture с вердиктом `rejected`:
-1. Создай файл в `{{WORKSPACE_DIR}}/DS-strategy/inbox/archive/rejected/` с именем `CO.reject.{NNN}-{slug}.md`
-2. Frontmatter: `id`, `type: capture`, `status: rejected`, `reason`, `date`, `source`, `tags`
-3. Добавь запись в `{{WORKSPACE_DIR}}/DS-strategy/inbox/archive/index.md` (новая строка в таблице Реестр)
-
 ### Шаг 5: Закоммитить
 
 1. Закоммить extraction report (новый)
 2. Закоммить captures.md (метки analyzed)
-3. Запушить DS-strategy
+3. Запушить {{GOVERNANCE_REPO}}
 
-**Сообщение коммита:** `inbox-check: N captures → routed outcomes {date}`
+**Сообщение коммита:** `inbox-check: N captures → extraction report {date}`
 
 ## Что НЕ делать
 
 - **НЕ записывай в Pack** — только генерируй отчёт. Запись = только в интерактивной сессии после одобрения
 - **НЕ ставь `[processed]`** — только `[analyzed]`. `[processed]` = записано в Pack (ставит session-close)
 - Не создавай файлы без frontmatter
-- Не отправляй governance/growth/personal-strategy inputs в пустой `reject`, если для них есть осмысленный DS/backlog маршрут
+- Не экстрагируй governance-контент
 - Не предлагай кандидаты, похожие на паттерны из feedback-log.md
 
 ## Применение отчёта (отдельная сессия)
 
 > Когда пользователь говорит «review extraction report» или «apply KE report»:
 
-1. Прочитай последний отчёт из `DS-strategy/inbox/extraction-reports/`
+1. Прочитай последний отчёт из `{{GOVERNANCE_REPO}}/inbox/extraction-reports/`
 2. Покажи каждый кандидат пользователю
-3. Для `pack_candidate` — создай файл, закоммить в целевой Pack
-4. Для `backlog_task` — убедись, что задача корректно оформлена в `INBOX`
-5. Для `recovery_item` — либо верни в backlog, либо сохрани как recovery до следующего цикла
-6. Для `rejected` — записать причину в feedback-log.md
-7. Для `deferred` — оставить в отчёте для следующего цикла
-8. Обнови статус отчёта: `status: applied`
+3. Для accept — создай файл, закоммить в целевой Pack
+4. Для reject — записать причину в feedback-log.md
+5. Для defer — оставь в отчёте для следующего цикла
+6. Обнови статус отчёта: `status: applied`

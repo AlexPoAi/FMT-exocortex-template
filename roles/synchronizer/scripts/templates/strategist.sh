@@ -2,13 +2,8 @@
 # Шаблон уведомлений: Стратег (R1)
 # Вызывается из notify.sh через source
 
-WORKSPACE_ROOT="$HOME/Github"
-if [ ! -d "$WORKSPACE_ROOT/DS-strategy/.git" ]; then
-    WORKSPACE_ROOT="$HOME/IWE"
-fi
-
-STRATEGY_DIR="$WORKSPACE_ROOT/DS-strategy/current"
-STRATEGY_REPO_DIR="$WORKSPACE_ROOT/DS-strategy"
+STRATEGY_DIR="/Users/alexander/Github/{{GOVERNANCE_REPO}}/current"
+STRATEGY_REPO_DIR="/Users/alexander/Github/{{GOVERNANCE_REPO}}"
 DATE=$(date +%Y-%m-%d)
 
 find_strategy_file() {
@@ -26,6 +21,14 @@ find_strategy_file() {
             echo ""
             ;;
     esac
+}
+
+# HTML-escape для контента из markdown-источника (parse_mode=HTML).
+# Применять к переменным, которые приходят из DayPlan/WeekPlan текста, ДО подстановки в printf.
+# Не применять к статическим <b>/<a> тегам из printf — они должны остаться буквальными.
+# Причина: фразы вида "<4/5", "a < b" в markdown ломают Telegram parser (Bad Request: Unsupported start tag).
+escape_html() {
+    python3 -c 'import sys, html; sys.stdout.write(html.escape(sys.stdin.read()))'
 }
 
 table_to_list() {
@@ -67,16 +70,6 @@ get_github_link() {
 
 build_message() {
     local scenario="$1"
-
-    if [ "$scenario" = "note-review-canary" ] || [ "$scenario" = "auth-failure" ]; then
-        if [ -n "${NOTIFY_TEXT:-}" ]; then
-            printf "%s" "${NOTIFY_TEXT}"
-        else
-            echo ""
-        fi
-        return
-    fi
-
     local file
     file=$(find_strategy_file "$scenario")
 
@@ -88,9 +81,9 @@ build_message() {
     case "$scenario" in
         "day-plan")
             local title
-            title=$(grep '^# ' "$file" | head -1 | sed 's/^# //')
+            title=$(grep '^# ' "$file" | head -1 | sed 's/^# //' | escape_html)
             local plan_items
-            plan_items=$(table_to_list "$file" "План на сегодня")
+            plan_items=$(table_to_list "$file" "План на сегодня" | escape_html)
 
             printf "<b>📋 %s</b>\n\n" "$title"
             printf "<b>План:</b>\n%s" "$plan_items"
@@ -98,10 +91,10 @@ build_message() {
 
         "session-prep")
             local title
-            title=$(grep '^# ' "$file" | head -1 | sed 's/^# //')
+            title=$(grep '^# ' "$file" | head -1 | sed 's/^# //' | escape_html)
             local plan_items
-            plan_items=$(table_to_list "$file" "Рабочие продукты")
-            [ -z "$plan_items" ] && plan_items=$(table_to_list "$file" "План на неделю")
+            plan_items=$(table_to_list "$file" "Рабочие продукты" | escape_html)
+            [ -z "$plan_items" ] && plan_items=$(table_to_list "$file" "План на неделю" | escape_html)
 
             printf "<b>📅 %s</b>\n\n" "$title"
             printf "<b>Рабочие продукты:</b>\n%s" "$plan_items"
@@ -109,7 +102,7 @@ build_message() {
 
         "week-review")
             local title
-            title=$(grep '^# ' "$file" | head -1 | sed 's/^# //')
+            title=$(grep '^# ' "$file" | head -1 | sed 's/^# //' | escape_html)
 
             printf "<b>📊 Week-Review завершён</b>\n\n%s" "$title"
             ;;
@@ -120,7 +113,7 @@ build_message() {
 
         *)
             local title
-            title=$(grep '^# ' "$file" | head -1 | sed 's/^# //')
+            title=$(grep '^# ' "$file" | head -1 | sed 's/^# //' | escape_html)
             printf "<b>📋 %s</b>\n\nСценарий <b>%s</b> завершён." "$title" "$scenario"
             ;;
     esac

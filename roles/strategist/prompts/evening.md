@@ -2,7 +2,7 @@
 
 ## Контекст
 
-- Планы: {{WORKSPACE_DIR}}/DS-strategy/current/
+- Планы: /Users/alexander/Github/{{GOVERNANCE_REPO}}/current/
 
 ## Алгоритм
 

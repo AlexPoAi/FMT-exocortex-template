@@ -10,18 +10,6 @@
 3. **Notify:** Отправляет результаты в Telegram
 4. **Report:** Генерирует ежедневный отчёт здоровья системы
 
-> Truthful note: Synchronizer подтверждён как operational dispatcher и reporting layer. Он пока не считается полностью оформленным acceptance-harness для проверки зрелости всех агентов без отдельной verification-логики.
-
-## Acceptance
-
-Truthful acceptance-семантика и критерии `pass / partial / broken` описаны в [ACCEPTANCE.md](./ACCEPTANCE.md).
-
-Operationally confirmed:
-- `scheduler.sh`, `health-check.sh`, `daily-report.sh`, runtime/status refresh
-
-Target capability:
-- единый acceptance-harness для зрелости всего агентного слоя без отдельной инженерной настройки
-
 ## Компоненты
 
 | Скрипт | Что делает | Триггер |
@@ -31,12 +19,11 @@ Target capability:
 | `daily-report.sh` | Отчёт здоровья: светофор, ошибки, рекомендации | scheduler (после утра) |
 | `sync-files.sh` | Точечная синхронизация файлов из remote | scheduler (каждые 2 мин) |
 | `notify.sh` | Отправка в Telegram через шаблоны агентов | После каждого процесса |
-| `send-telegram.sh` | Ручная отправка текста, фото и документов в Telegram | По запросу |
 
 ## Установка
 
 ```bash
-cd {{WORKSPACE_DIR}}/FMT-exocortex-template/roles/synchronizer
+cd /Users/alexander/Github/FMT-exocortex-template/roles/synchronizer
 bash install.sh
 ```
 
@@ -50,6 +37,29 @@ export TELEGRAM_CHAT_ID="your-chat-id"
 ```
 
 Без этого файла уведомления просто не отправляются (скрипты не падают).
+
+### Author-only скрипты (НЕ для конечных пользователей)
+
+Следующие скрипты требуют прямого доступа к production-БД Neon платформы
+(секреты автора шаблона) и **не предназначены для запуска у пользователей IWE**:
+
+- `dt-collect.sh` — сбор активности и запись в ЦД через `NEON_URL` + `DT_USER_ID`
+- `dt-collect-neon.py` — writer для `dt-collect.sh`
+
+`scheduler.sh` автоматически пропускает `dt-collect.sh`, если в
+`~/.config/aist/env` отсутствуют `NEON_URL` и `DT_USER_ID`. То есть
+у пользователей без этих секретов скрипт не запускается — скачанный в
+шаблоне код при этом остаётся как маркер будущей фичи.
+
+**Пользовательский путь** записи активности в Память/ЦД — MCP-инструмент
+`dt_write_digital_twin` в IWE Gateway (JWT подписки идентифицирует
+пользователя, прямое подключение к БД не нужно).
+
+**Системный переход** `dt-collect` → event-gateway (REST-endpoint с
+service-token, без прямого psycopg2) запланирован отдельной фазой в
+миграционном роадмапе WP-253 (`DP.ROADMAP.001-neon-migration.md`) и
+активируется после Ф3 создания #2 journal. До этого момента
+`dt-collect.sh` остаётся переходным артефактом автора.
 
 ## Расписание
 
@@ -79,7 +89,6 @@ roles/synchronizer/
 │   ├── daily-report.sh            # Отчёт здоровья
 │   ├── sync-files.sh              # Точечная синхронизация
 │   ├── notify.sh                  # Telegram dispatch
-│   ├── send-telegram.sh           # Ручная отправка текста/фото/документов
 │   ├── templates/
 │   │   ├── strategist.sh          # Шаблон TG для Стратега
 │   │   ├── extractor.sh           # Шаблон TG для Экстрактора

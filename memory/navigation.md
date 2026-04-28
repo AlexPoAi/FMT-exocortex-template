@@ -1,6 +1,9 @@
+---
+valid_from: 2026-04-13
+originSessionId: 9a0e726a-951e-4408-9e02-94d7eeffbf74
+---
 # Навигация по репозиториям (Слой 3)
 
-> Claude читает этот файл при поиске конкретного файла/репо. Для поиска знаний → `mcp__claude_ai_knowledge-mcp__search`.
 
 ## Ключевые файлы
 
@@ -12,8 +15,10 @@
 | Чеклисты | `memory/checklists.md` |
 | SOTA-практики (18 шт.) | `memory/sota-reference.md` |
 | Протокол Open (WP Gate, Ритуал) | `memory/protocol-open.md` |
-| Протокол Work (правила выполнения) | `memory/protocol-work.md` |
-| Протокол Close (truthful close contract) | `memory/protocol-close.md` |
+| Протокол Close (маршрутизация, Quick Close) | `memory/protocol-close.md` |
+| Day Close (полный алгоритм) | `.claude/skills/day-close/SKILL.md` |
+| Week Close (полный алгоритм) | `.claude/skills/week-close/SKILL.md` |
+| Шаблоны DayPlan/WeekPlan | `memory/templates-dayplan.md` |
 | Нулевые принципы + иерархия | `ZP/README.md` |
 | Кодирование сущностей | `SPF/spec/SPF.SPEC.001-entity-coding.md` |
 | Масштабируемость Pack | `SPF/spec/SPF.SPEC.003-pack-scalability.md` |
@@ -22,14 +27,10 @@
 
 | Репо | Путь |
 |------|------|
-| LMS Aisystant (READ-ONLY) | `DS-IT-systems/aisystant/` |
-| SystemsSchool_bot (READ-ONLY) | `DS-IT-systems/SystemsSchool_bot/` |
-| Монорепо ИИ-систем (7 шт.) | `DS-IT-systems/DS-ai-systems/` |
-| — Стратег (Grade 3) | `DS-IT-systems/DS-strategist/` |
-| — Шаблонизатор (Grade 0) | `FMT-exocortex-template/setup.sh` (user), `DS-IT-systems/DS-ai-systems/setup/` (author sync) |
-| — Наладчик (Grade 2) | `DS-IT-systems/DS-ai-systems/fixer/` |
-| — Статистик (Grade 1) | `DS-IT-systems/DS-ai-systems/pulse/` |
-| — Оценщик (Grade 2) | `DS-IT-systems/DS-ai-systems/evaluator/` |
+<!-- Добавьте свои DS-репо. Пример: -->
+<!-- | Мой бот (READ-ONLY) | `your-org/your-bot/` | -->
+<!-- | Монорепо ИИ-систем | `your-org/ai-systems/` | -->
+| Шаблонизатор | `FMT-exocortex-template/setup.sh` |
 | Личная онтология | `DS-strategy/ontology.md` |
 | Программа обучения | `DS-principles-curriculum/` |
 
@@ -55,11 +56,7 @@
 
 | MCP | Путь |
 |-----|------|
-| knowledge-mcp (исходники) | `DS-MCP/knowledge-mcp/src/index.ts` |
-| knowledge-mcp (ingest) | `DS-MCP/knowledge-mcp/scripts/ingest.ts` |
-| guides-mcp (исходники) | `DS-MCP/guides-mcp/src/index.ts` |
-| fsm-mcp (исходники) | `DS-MCP/fsm-mcp/src/index.ts` |
-| Activity Hub | `DS-IT-systems/activity-hub/` |
+<!-- | Activity Hub | `your-org/activity-hub/` | -->
 | Автономные агенты (код) | `DS-autonomous-agents/` |
 | Данные агентов (workspace) | `DS-agent-workspace/` |
 

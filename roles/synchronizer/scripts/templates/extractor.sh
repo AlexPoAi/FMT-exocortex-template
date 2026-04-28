@@ -2,7 +2,7 @@
 # Шаблон уведомлений: Экстрактор (R2)
 # Вызывается из notify.sh через source
 
-REPORTS_DIR="{{WORKSPACE_DIR}}/DS-strategy/inbox/extraction-reports"
+REPORTS_DIR="/Users/alexander/Github/{{GOVERNANCE_REPO}}/inbox/extraction-reports"
 DATE=$(date +%Y-%m-%d)
 
 build_message() {
@@ -19,19 +19,15 @@ build_message() {
             fi
 
             local candidates
-            candidates=$(grep -c '^## Кандидат' "$report" 2>/dev/null || echo "0")
+            candidates=$(grep -c '^## Кандидат' "$report" 2>/dev/null || true); candidates=${candidates:-0}
             local accept
-            accept=$(grep -c 'Вердикт.*accept' "$report" 2>/dev/null || echo "0")
-            local pack_candidates
-            pack_candidates=$(grep -c 'Вердикт.*pack_candidate' "$report" 2>/dev/null || echo "0")
+            accept=$(grep -c 'Вердикт.*accept' "$report" 2>/dev/null || true); accept=${accept:-0}
 
             printf "<b>🔍 Knowledge Extractor: %s</b>\n\n" "$process"
             printf "📅 %s\n\n" "$DATE"
-            printf "📊 Всего: %s | Accept: %s | В Pack: %s\n\n" "$candidates" "$accept" "$pack_candidates"
+            printf "📊 Кандидатов: %s, Accept: %s\n\n" "$candidates" "$accept"
 
-            if [ "$pack_candidates" -gt 0 ]; then
-                printf "📦 Есть кандидаты в Pack — скажи агенту <b>«apply ke report»</b>"
-            elif [ "$candidates" -gt 0 ]; then
+            if [ "$candidates" -gt 0 ]; then
                 printf "Для применения: в Claude скажите «review extraction report»"
             else
                 printf "Inbox пуст."
@@ -40,18 +36,6 @@ build_message() {
 
         "audit")
             printf "<b>🔍 Knowledge Audit завершён</b>\n\n📅 %s\n\nПроверьте лог: ~/logs/extractor/%s.log" "$DATE" "$DATE"
-            ;;
-
-        "session-import")
-            printf "<b>📥 Импорт сессии</b>\n\n📅 %s\n\nСессия импортирована в captures.md" "$DATE"
-            ;;
-
-        "session-tasks")
-            printf "<b>📋 Извлечение задач</b>\n\n📅 %s\n\nЗадачи добавлены в INBOX-TASKS.md" "$DATE"
-            ;;
-
-        "archive-review")
-            printf "<b>📚 Обзор архива</b>\n\n📅 %s\n\nАрхив проверен" "$DATE"
             ;;
 
         *)

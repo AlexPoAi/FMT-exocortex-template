@@ -1,13 +1,20 @@
 #!/bin/bash
 # code-scan.sh — ночное сканирование Downstream-репо (статистика активности)
+#
+# Обходит downstream-репозитории, собирает коммиты за последние 24ч,
+# логирует активность.
+#
+# Использование:
+#   code-scan.sh           # сканировать все downstream-репо
+#   code-scan.sh --dry-run # показать что найдёт, не записывать
+#
+# Триггер: scheduler.sh dispatch (ежедневно)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
-eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
-WORKSPACE="$WORKSPACE_DIR"
-LOG_DIR="$HOME/logs/synchronizer"
+WORKSPACE="/Users/alexander/Github"
+LOG_DIR="/Users/alexander/logs/synchronizer"
 DATE=$(date +%Y-%m-%d)
 LOG_FILE="$LOG_DIR/code-scan-$DATE.log"
 
@@ -20,9 +27,15 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [code-scan] $1" | tee -a "$LOG_FILE"
 }
 
+# === Обнаружение Downstream-репо ===
+
 discover_repos() {
     local repos=()
-    local exclude=("DS-strategy")
+
+    # Governance-репо — исключаем из сканирования
+    local exclude=(
+        "{{GOVERNANCE_REPO}}"
+    )
 
     for dir in "$WORKSPACE"/DS-*/; do
         [ -d "$dir/.git" ] || continue
@@ -36,12 +49,10 @@ discover_repos() {
         repos+=("$dir")
     done
 
-    if [ "${#repos[@]}" -eq 0 ]; then
-        return 0
-    fi
-
     printf '%s\n' "${repos[@]}"
 }
+
+# === Основной цикл ===
 
 scan_repos() {
     local total_repos=0
@@ -66,10 +77,12 @@ scan_repos() {
 
         total_repos=$((total_repos + 1))
         total_commits=$((total_commits + count))
+
     done < <(discover_repos)
 
     log "Итого: $total_repos репо, $total_commits коммитов"
 
+    # Уведомление в Telegram
     if [ "$DRY_RUN" = false ] && [ "$total_repos" -gt 0 ]; then
         "$SCRIPT_DIR/notify.sh" synchronizer code-scan 2>/dev/null || true
     fi

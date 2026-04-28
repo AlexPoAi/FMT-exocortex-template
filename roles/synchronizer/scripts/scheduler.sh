@@ -31,37 +31,44 @@ portable_date_offset() {
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SYNC_DIR="$(dirname "$SCRIPT_DIR")"
 STATE_DIR="$HOME/.local/state/exocortex"
-STATUS_DIR="$STATE_DIR/status"
 LOG_DIR="$HOME/logs/synchronizer"
 LOG_FILE="$LOG_DIR/scheduler-$(date +%Y-%m-%d).log"
-RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
-eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
-SCHEDULER_RUNTIME_FILE="$WORKSPACE_DIR/DS-strategy/current/SCHEDULER-RUNTIME.env"
 
-if [ -f "$SCHEDULER_RUNTIME_FILE" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "$SCHEDULER_RUNTIME_FILE"
-    set +a
+# WP-273 R5 fix (Round 5 Евгения): substituted runners в .iwe-runtime/, но
+# role.yaml — read-only метаданные (не substituted, нет плейсхолдеров) — должны
+# браться из FMT через $IWE_TEMPLATE. notify.sh — также read-only.
+ROLES_DIR_RUNTIME="{{IWE_RUNTIME}}/roles"
+ROLES_DIR_TEMPLATE="${IWE_TEMPLATE:-$HOME/IWE/FMT-exocortex-template}/roles"
+# WP-273 0.29.3: silent degradation guard. Если IWE_TEMPLATE пуста — env неполная.
+if [ -z "${IWE_TEMPLATE:-}" ]; then
+    echo "[$(date '+%H:%M:%S')] WARN: \$IWE_TEMPLATE не задана, scheduler использует fallback $HOME/IWE/FMT-exocortex-template. source ~/.zshenv?" >&2
+fi
+ROLES_DIR="$ROLES_DIR_RUNTIME"  # backward-compat alias для downstream-логики
+# notify.sh — read-only, не substituted
+if [ -n "${IWE_TEMPLATE:-}" ] && [ -f "$IWE_TEMPLATE/roles/synchronizer/scripts/notify.sh" ]; then
+    NOTIFY_SH="$IWE_TEMPLATE/roles/synchronizer/scripts/notify.sh"
+elif [ -f "$HOME/IWE/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh" ]; then
+    NOTIFY_SH="$HOME/IWE/FMT-exocortex-template/roles/synchronizer/scripts/notify.sh"
+else
+    NOTIFY_SH="$SCRIPT_DIR/notify.sh"  # legacy fallback
 fi
 
-EXOCORTEX_RUNTIME_TARGET="${EXOCORTEX_RUNTIME_TARGET:-local}"
-EXOCORTEX_DISABLE_LOCAL_DISPATCH="${EXOCORTEX_DISABLE_LOCAL_DISPATCH:-0}"
+# Таймаут на задачи (сек): предотвращает блокировку dispatch зависшей задачей
+TASK_TIMEOUT_SHORT=300    # 5 мин — bash-скрипты (code-scan, dt-collect, reindex)
+TASK_TIMEOUT_LONG=1800    # 30 мин — Claude CLI (strategist, scout, extractor)
 
-ROLES_DIR="$WORKSPACE_DIR/FMT-exocortex-template/roles"
-NOTIFY_SH="$SCRIPT_DIR/notify.sh"
-
-# Role runner discovery: reads runner path from role.yaml, fallback to convention
+# Role runner discovery: role.yaml — read-only из FMT (template), runner — substituted из runtime.
+# WP-273 R5: разделили location'ы — yaml из template, runner из runtime.
 get_role_runner() {
     local role="$1"
-    local yaml="$ROLES_DIR/$role/role.yaml"
+    local yaml="$ROLES_DIR_TEMPLATE/$role/role.yaml"
     if [ -f "$yaml" ]; then
         local runner
         runner=$(grep '^runner:' "$yaml" | sed 's/runner: *//' | tr -d '"' | tr -d "'")
-        [ -n "$runner" ] && echo "$ROLES_DIR/$role/$runner" && return
+        [ -n "$runner" ] && echo "$ROLES_DIR_RUNTIME/$role/$runner" && return
     fi
-    # Fallback: convention-based path
-    echo "$ROLES_DIR/$role/scripts/$role.sh"
+    # Fallback: convention-based path (substituted runner в runtime)
+    echo "$ROLES_DIR_RUNTIME/$role/scripts/$role.sh"
 }
 
 STRATEGIST_SH="$(get_role_runner strategist)"
@@ -75,6 +82,27 @@ WEEK=$(date +%V)
 NOW=$(date +%s)
 
 mkdir -p "$STATE_DIR" "$LOG_DIR"
+
+# macOS не имеет GNU timeout — используем perl fallback
+if ! command -v timeout &>/dev/null; then
+    timeout() {
+        local duration="$1"; shift
+        perl -e '
+            use POSIX ":sys_wait_h";
+            my $timeout = shift @ARGV;
+            my $pid = fork();
+            if ($pid == 0) { exec @ARGV; die "exec failed: $!"; }
+            eval {
+                local $SIG{ALRM} = sub { die "alarm" };
+                alarm($timeout);
+                waitpid($pid, 0);
+                alarm(0);
+            };
+            if ($@ =~ /alarm/) { kill("TERM", $pid); sleep(1); kill("KILL", $pid); waitpid($pid, WNOHANG); exit(124); }
+            exit($? >> 8);
+        ' "$duration" "$@"
+    }
+fi
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [scheduler] $1" | tee -a "$LOG_FILE"
@@ -98,24 +126,6 @@ mark_done_week() {
     echo "$DATE $(date '+%H:%M:%S')" > "$STATE_DIR/$1-W$WEEK"
 }
 
-weekly_status_verified() {
-    local task="$1"
-    local status_file="$STATUS_DIR/${task}.status"
-    local task_name="" status="" evidence=""
-
-    [ -f "$status_file" ] || return 1
-
-    # shellcheck disable=SC1090
-    source "$status_file"
-    task_name="${TASK_NAME:-}"
-    status="${STATUS:-}"
-    evidence="${EVIDENCE_STATUS:-}"
-
-    [ "$task_name" = "$task" ] || return 1
-    [ "$status" = "success" ] || return 1
-    [ "$evidence" = "verified" ] || return 1
-}
-
 last_run_seconds_ago() {
     local marker="$STATE_DIR/$1-last"
     if [ -f "$marker" ]; then
@@ -131,90 +141,6 @@ mark_interval() {
     echo "$NOW" > "$STATE_DIR/$1-last"
 }
 
-status_log_path_for_task() {
-    case "$1" in
-        synchronizer-code-scan)
-            printf '%s\n' "$LOG_DIR/code-scan-$DATE.log"
-            ;;
-        synchronizer-daily-report)
-            printf '%s\n' "$LOG_DIR/daily-report-$DATE.log"
-            ;;
-        *)
-            printf '%s\n' "$LOG_FILE"
-            ;;
-    esac
-}
-
-status_artifacts_for_task() {
-    case "$1" in
-        synchronizer-daily-report)
-            printf '%s\n' "current/SchedulerReport $DATE.md;current/AGENTS-STATUS.md;current/SESSION-OPEN (Экран открытия сессии).md"
-            ;;
-        *)
-            printf '%s\n' ""
-            ;;
-    esac
-}
-
-write_scheduler_status_artifact() {
-    local task="$1"
-    local status="$2"
-    local exit_code="$3"
-    local summary="$4"
-    local evidence_status="$5"
-    local evidence_summary="$6"
-    local error_summary="${7:-}"
-    local completed_window="${8:-false}"
-    local log_path="${9:-}"
-    local produced_artifacts="${10:-}"
-    local status_file="$STATUS_DIR/${task}.status"
-    local now_ts run_id previous_last_success previous_last_failure
-
-    mkdir -p "$STATUS_DIR"
-
-    previous_last_success=""
-    previous_last_failure=""
-    if [ -f "$status_file" ]; then
-        # shellcheck disable=SC1090
-        source "$status_file"
-        previous_last_success="${LAST_SUCCESS_AT:-}"
-        previous_last_failure="${LAST_FAILURE_AT:-}"
-    fi
-
-    now_ts="$(date '+%Y-%m-%d %H:%M:%S')"
-    run_id="$(date '+%Y%m%d-%H%M%S')-$$"
-
-    if [ "$status" = "success" ]; then
-        previous_last_success="$now_ts"
-    fi
-
-    if [ "$status" = "failed" ]; then
-        previous_last_failure="$now_ts"
-    fi
-
-    cat > "$status_file" <<EOF
-TASK_NAME="$task"
-RUN_ID="$run_id"
-STATUS="$status"
-EXIT_CODE="$exit_code"
-SUMMARY="$summary"
-START_TS="$now_ts"
-END_TS="$now_ts"
-LAST_STARTED_AT="$now_ts"
-LAST_FINISHED_AT="$now_ts"
-LAST_SUCCESS_AT="$previous_last_success"
-LAST_FAILURE_AT="$previous_last_failure"
-EVIDENCE_STATUS="$evidence_status"
-EVIDENCE_SUMMARY="$evidence_summary"
-ERROR_SUMMARY="$error_summary"
-STALENESS_BUDGET_SEC="86400"
-PRODUCED_ARTIFACTS="$produced_artifacts"
-COMPLETED_WINDOW="$completed_window"
-LOG_PATH="$log_path"
-UPDATED_AT="$now_ts"
-EOF
-}
-
 # === Очистка старых маркеров (>7 дней) ===
 
 cleanup_state() {
@@ -225,7 +151,7 @@ cleanup_state() {
 # Разделяет архивацию (мгновенно) и генерацию (15+ мин Claude Code).
 # Гарантирует: даже если генерация ещё не началась, старый план не висит в current/.
 pre_archive_dayplan() {
-    local strategy_dir="$WORKSPACE_DIR/DS-strategy"
+    local strategy_dir="/Users/alexander/Github/{{GOVERNANCE_REPO}}"
     local archive_dir="$strategy_dir/archive/day-plans"
     local moved=0
 
@@ -258,33 +184,46 @@ pre_archive_dayplan() {
 # === Диспетчер ===
 
 dispatch() {
-    log "dispatch started (hour=$HOUR, dow=$DOW)"
-
-    if [ "$EXOCORTEX_DISABLE_LOCAL_DISPATCH" = "1" ]; then
-        log "dispatch skipped: local dispatch disabled by $SCHEDULER_RUNTIME_FILE (runtime_target=$EXOCORTEX_RUNTIME_TARGET)"
-        return 0
+    # WP-273 0.29.4 R6.5: self-reentrancy guard. Если предыдущий dispatch ещё работает
+    # (Claude CLI 30 мин), launchd может запустить следующий — двойной morning strategist.
+    # Используем flock на $STATE_DIR/scheduler.lock (non-blocking: новый dispatch выходит сразу).
+    if command -v flock >/dev/null 2>&1; then
+        exec 8>"$STATE_DIR/scheduler.lock"
+        if ! flock -n 8; then
+            log "SKIP: another scheduler dispatch уже работает (flock contended)"
+            return 0
+        fi
     fi
 
+    # WP-273 0.29.4 R6.3: shared lock на runtime swap — ждём если build-runtime в процессе.
+    if command -v flock >/dev/null 2>&1 && [ -f "${IWE_WORKSPACE:-$HOME/IWE}/.iwe-runtime.lock" ]; then
+        exec 7>"${IWE_WORKSPACE:-$HOME/IWE}/.iwe-runtime.lock"
+        flock -s -w 5 7 2>/dev/null || log "WARN: runtime lock contended >5s — proceeding (read paths могут быть устаревшими)"
+    fi
+
+    log "dispatch started (hour=$HOUR, dow=$DOW)"
     local ran=0
 
     # --- Pre-archive: убрать вчерашний DayPlan ДО генерации нового ---
     pre_archive_dayplan
 
+    # --- AC sleep check (macOS): на зарядке Mac не должен засыпать ---
+    if [[ "$(uname)" == "Darwin" ]] && ! ran_today "pmset-check"; then
+        local ac_sleep
+        ac_sleep=$(pmset -g custom 2>/dev/null | sed -n '/AC Power/,/Battery Power/p' | grep '^ sleep' | awk '{print $2}')
+        if [ -n "$ac_sleep" ] && [ "$ac_sleep" != "0" ]; then
+            log "⚠️  AC sleep=$ac_sleep (should be 0) — Mac will sleep on charger. Fix: sudo pmset -c sleep 0"
+        fi
+        mark_done "pmset-check"
+    fi
+
     # --- Стратег: week-review (Пн, до morning) ---
     if [ "$DOW" = "1" ] && ! ran_this_week "strategist-week-review"; then
         log "→ strategist week-review (catch-up: hour=$HOUR)"
-        set +e
-        "$STRATEGIST_SH" week-review >> "$LOG_FILE" 2>&1
-        _rc=$?
-        set -e
-        if [ "$_rc" -eq 0 ] && weekly_status_verified "strategist-week-review"; then
+        if timeout "$TASK_TIMEOUT_LONG" "$STRATEGIST_SH" week-review >> "$LOG_FILE" 2>&1; then
             mark_done_week "strategist-week-review"
-        elif [ "$_rc" -eq 0 ]; then
-            log "WARN: strategist week-review exited 0 but status artifact is not verified-success; weekly marker not set"
-        elif [ "$_rc" -eq 2 ]; then
-            log "INFO: strategist week-review — уже выполняется (lock), ждём завершения"
         else
-            log "WARN: strategist week-review failed (exit $_rc, will retry next dispatch)"
+            log "WARN: strategist week-review failed (will retry next dispatch)"
         fi
         ran=1
     fi
@@ -292,17 +231,10 @@ dispatch() {
     # --- Стратег: morning (04:00-21:59) ---
     if (( 10#$HOUR >= 4 && 10#$HOUR < 22 )) && ! ran_today "strategist-morning"; then
         log "→ strategist morning (catch-up: hour=$HOUR)"
-        set +e
-        "$STRATEGIST_SH" morning >> "$LOG_FILE" 2>&1
-        _rc=$?
-        set -e
-        if [ "$_rc" -eq 0 ]; then
+        if timeout "$TASK_TIMEOUT_LONG" "$STRATEGIST_SH" morning >> "$LOG_FILE" 2>&1; then
             mark_done "strategist-morning"
-        elif [ "$_rc" -eq 2 ]; then
-            log "INFO: strategist morning — уже выполняется (lock), ждём завершения"
-            # exit 2 = SKIP (lock exists), не ошибка — не помечаем done, повторим следующий dispatch
         else
-            log "WARN: strategist morning failed (exit $_rc, will retry next dispatch)"
+            log "WARN: strategist morning failed (will retry next dispatch)"
         fi
         ran=1
     fi
@@ -310,16 +242,10 @@ dispatch() {
     # --- Стратег: note-review (22:00+) ---
     if (( 10#$HOUR >= 22 )) && ! ran_today "strategist-note-review"; then
         log "→ strategist note-review (catch-up: hour=$HOUR)"
-        set +e
-        "$STRATEGIST_SH" note-review >> "$LOG_FILE" 2>&1
-        _rc=$?
-        set -e
-        if [ "$_rc" -eq 0 ]; then
+        if timeout "$TASK_TIMEOUT_LONG" "$STRATEGIST_SH" note-review >> "$LOG_FILE" 2>&1; then
             mark_done "strategist-note-review"
-        elif [ "$_rc" -eq 2 ]; then
-            log "INFO: strategist note-review — уже выполняется (lock), ждём завершения"
         else
-            log "WARN: strategist note-review failed (exit $_rc, will retry next dispatch)"
+            log "WARN: strategist note-review failed (will retry next dispatch)"
         fi
         ran=1
     elif (( 10#$HOUR < 12 )); then
@@ -327,7 +253,7 @@ dispatch() {
         yesterday=$(portable_date_offset 1)
         if [ -n "$yesterday" ] && [ ! -f "$STATE_DIR/strategist-note-review-$yesterday" ]; then
             log "→ strategist note-review (catch-up for yesterday $yesterday)"
-            if "$STRATEGIST_SH" note-review >> "$LOG_FILE" 2>&1; then
+            if timeout "$TASK_TIMEOUT_LONG" "$STRATEGIST_SH" note-review >> "$LOG_FILE" 2>&1; then
                 echo "$(date '+%H:%M:%S') catch-up" > "$STATE_DIR/strategist-note-review-$yesterday"
             else
                 log "WARN: strategist note-review catch-up failed"
@@ -339,103 +265,39 @@ dispatch() {
     # --- Синхронизатор: code-scan (ежедневно) ---
     if ! ran_today "synchronizer-code-scan"; then
         log "→ synchronizer code-scan (hour=$HOUR)"
-        if "$SCRIPT_DIR/code-scan.sh" >> "$LOG_FILE" 2>&1; then
+        if timeout "$TASK_TIMEOUT_SHORT" "$SCRIPT_DIR/code-scan.sh" >> "$LOG_FILE" 2>&1; then
             mark_done "synchronizer-code-scan"
-            write_scheduler_status_artifact \
-                "synchronizer-code-scan" \
-                "success" \
-                "0" \
-                "completed successfully via scheduler dispatch" \
-                "verified" \
-                "scheduler confirmed successful code-scan run" \
-                "" \
-                "true" \
-                "$(status_log_path_for_task synchronizer-code-scan)" \
-                "$(status_artifacts_for_task synchronizer-code-scan)"
         else
-            write_scheduler_status_artifact \
-                "synchronizer-code-scan" \
-                "failed" \
-                "1" \
-                "scheduler dispatch run failed" \
-                "reported" \
-                "scheduler observed non-zero exit from code-scan" \
-                "code-scan failed during scheduler dispatch" \
-                "false" \
-                "$(status_log_path_for_task synchronizer-code-scan)" \
-                "$(status_artifacts_for_task synchronizer-code-scan)"
             log "WARN: code-scan failed (will retry next dispatch)"
         fi
         ran=1
     fi
 
     # --- Синхронизатор: dt-collect (после code-scan) ---
+    # AUTHOR-ONLY: требует NEON_URL + DT_USER_ID в ~/.config/aist/env (секреты автора
+    # шаблона). Пользовательский путь — через event-gateway, фаза в WP-253 роадмапе.
     if ! ran_today "synchronizer-dt-collect"; then
-        log "→ synchronizer dt-collect (hour=$HOUR)"
-        if "$SCRIPT_DIR/dt-collect.sh" >> "$LOG_FILE" 2>&1; then
-            mark_done "synchronizer-dt-collect"
-        else
-            log "WARN: dt-collect failed (will retry next dispatch)"
+        if [ -f "$HOME/.config/aist/env" ] && grep -qE '^NEON_URL=' "$HOME/.config/aist/env" \
+           && grep -qE '^DT_USER_ID=' "$HOME/.config/aist/env"; then
+            log "→ synchronizer dt-collect (hour=$HOUR)"
+            if timeout "$TASK_TIMEOUT_SHORT" "$SCRIPT_DIR/dt-collect.sh" >> "$LOG_FILE" 2>&1; then
+                mark_done "synchronizer-dt-collect"
+            else
+                log "WARN: dt-collect failed (will retry next dispatch)"
+            fi
+            ran=1
         fi
-        ran=1
+        # Если env отсутствует — молча пропускаем (author-only, у пользователей нет секретов).
     fi
 
     # --- Синхронизатор: daily-report (после code-scan и strategist morning) ---
     if ! ran_today "synchronizer-daily-report"; then
         if ran_today "strategist-morning" || (( 10#$HOUR >= 6 )); then
             log "→ synchronizer daily-report (hour=$HOUR)"
-            if "$SCRIPT_DIR/daily-report.sh" >> "$LOG_FILE" 2>&1; then
+            if timeout "$TASK_TIMEOUT_SHORT" "$SCRIPT_DIR/daily-report.sh" >> "$LOG_FILE" 2>&1; then
                 mark_done "synchronizer-daily-report"
-                write_scheduler_status_artifact \
-                    "synchronizer-daily-report" \
-                    "success" \
-                    "0" \
-                    "completed successfully via scheduler dispatch" \
-                    "verified" \
-                    "scheduler confirmed successful daily-report run" \
-                    "" \
-                    "true" \
-                    "$(status_log_path_for_task synchronizer-daily-report)" \
-                    "$(status_artifacts_for_task synchronizer-daily-report)"
             else
-                write_scheduler_status_artifact \
-                    "synchronizer-daily-report" \
-                    "failed" \
-                    "1" \
-                    "scheduler dispatch run failed" \
-                    "reported" \
-                    "scheduler observed non-zero exit from daily-report" \
-                    "daily-report failed during scheduler dispatch" \
-                    "false" \
-                    "$(status_log_path_for_task synchronizer-daily-report)" \
-                    "$(status_artifacts_for_task synchronizer-daily-report)"
                 log "WARN: daily-report failed (will retry next dispatch)"
-            fi
-            ran=1
-        fi
-    fi
-
-    # --- Синхронизатор: unprocessed-notes-check (после daily-report) ---
-    if ! ran_today "synchronizer-unprocessed-check"; then
-        if ran_today "synchronizer-daily-report"; then
-            log "→ synchronizer unprocessed-notes-check"
-            if "$SCRIPT_DIR/unprocessed-notes-check.sh" >> "$LOG_FILE" 2>&1; then
-                mark_done "synchronizer-unprocessed-check"
-            else
-                log "WARN: unprocessed-notes-check failed (will retry next dispatch)"
-            fi
-            ran=1
-        fi
-    fi
-
-    # --- Синхронизатор: daily-telegram-report (один раз в день, после 08:00) ---
-    if ! ran_today "synchronizer-telegram-report"; then
-        if (( 10#$HOUR >= 8 )); then
-            log "→ synchronizer daily-telegram-report"
-            if "$SCRIPT_DIR/daily-telegram-report.sh" >> "$LOG_FILE" 2>&1; then
-                mark_done "synchronizer-telegram-report"
-            else
-                log "WARN: daily-telegram-report failed (will retry next dispatch)"
             fi
             ran=1
         fi
@@ -447,7 +309,7 @@ dispatch() {
         elapsed=$(last_run_seconds_ago "extractor-inbox-check")
         if [ "$elapsed" -ge 10800 ]; then
             log "→ extractor inbox-check (${elapsed}s since last)"
-            if "$EXTRACTOR_SH" inbox-check >> "$LOG_FILE" 2>&1; then
+            if timeout "$TASK_TIMEOUT_LONG" "$EXTRACTOR_SH" inbox-check >> "$LOG_FILE" 2>&1; then
                 mark_interval "extractor-inbox-check"
             else
                 log "WARN: extractor inbox-check failed (will retry next dispatch)"
@@ -469,9 +331,6 @@ dispatch() {
 show_status() {
     echo "=== Exocortex Scheduler Status ==="
     echo "Date: $DATE  Hour: $HOUR  DOW: $DOW  Week: W$WEEK"
-    echo "Runtime target: $EXOCORTEX_RUNTIME_TARGET"
-    echo "Local dispatch disabled: $EXOCORTEX_DISABLE_LOCAL_DISPATCH"
-    echo "Runtime config: $SCHEDULER_RUNTIME_FILE"
     echo ""
 
     echo "--- Today's runs ---"

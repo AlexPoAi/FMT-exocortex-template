@@ -1,7 +1,7 @@
 #!/bin/bash
 # day-close.sh — Автоматические шаги Day Close (backup + reindex + linear sync)
 #
-# Вызывается из provider-agnostic Day Close route (`protocol-close.md` / `day-close-safe.sh`, шаг механических операций).
+# Вызывается Claude из протокола Day Close (protocol-close.md § День, шаг 4).
 # Объединяет три механических операции в одну команду.
 #
 # Использование:
@@ -15,18 +15,25 @@
 set -euo pipefail
 
 # === КОНФИГУРАЦИЯ (настроить при установке) ===
-RESOLVE_WORKSPACE_SH="$HOME/Github/FMT-exocortex-template/roles/synchronizer/scripts/resolve-workspace.sh"
-if [ ! -f "$RESOLVE_WORKSPACE_SH" ]; then
-  RESOLVE_WORKSPACE_SH="$(cd "$(dirname "$0")/../roles/synchronizer/scripts" && pwd)/resolve-workspace.sh"
-fi
-if [ -f "$RESOLVE_WORKSPACE_SH" ]; then
-  eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
-fi
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Github}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/IWE}"
 DS_STRATEGY="$WORKSPACE_DIR/DS-strategy"
+MEMORY_SRC="$HOME/.claude/projects/-Users-$(whoami)-IWE/memory"
 EXOCORTEX_DST="$DS_STRATEGY/exocortex"
+# MCP reindex — опциональный компонент (WP-187 iwe-knowledge Gateway заменяет локальный knowledge-mcp).
+# Переопределить путь можно через env IWE_SELECTIVE_REINDEX.
+SELECTIVE_REINDEX="${IWE_SELECTIVE_REINDEX:-$WORKSPACE_DIR/DS-MCP/knowledge-mcp/scripts/selective-reindex.sh}"
+SOURCES_JSON="${IWE_SOURCES_JSON:-$WORKSPACE_DIR/DS-MCP/knowledge-mcp/scripts/sources.json}"
+SOURCES_PERSONAL_JSON="${IWE_SOURCES_PERSONAL_JSON:-$WORKSPACE_DIR/DS-MCP/knowledge-mcp/scripts/sources-personal.json}"
+# Linear sync: путь читается из params.yaml (ключ linear_sync_path)
 PARAMS_YAML="$WORKSPACE_DIR/params.yaml"
-LOG_FILE="$WORKSPACE_DIR/DS-agent-workspace/scheduler/day-close.log"
+LINEAR_SYNC=""
+if [ -f "$PARAMS_YAML" ]; then
+  _raw=$(python3 -c "import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d.get('linear_sync_path',''))" "$PARAMS_YAML" 2>/dev/null || echo "")
+  if [ -n "$_raw" ]; then
+    LINEAR_SYNC="${_raw/#\~/$HOME}"
+  fi
+fi
+LOG_FILE="${IWE_DAY_CLOSE_LOG:-$HOME/logs/day-close.log}"
 # === /КОНФИГУРАЦИЯ ===
 
 # Цвета
@@ -39,74 +46,11 @@ log() { echo -e "${GREEN}[day-close]${NC} $1"; }
 warn() { echo -e "${YELLOW}[day-close]${NC} $1"; }
 err() { echo -e "${RED}[day-close]${NC} $1" >&2; }
 
-resolve_memory_src() {
-  local user_slug
-  user_slug="$(whoami)"
-  for candidate in \
-    "$HOME/.claude/projects/-Users-${user_slug}-Github/memory" \
-    "$HOME/.claude/projects/-Users-${user_slug}-Github-DS-strategy/memory" \
-    "$HOME/.claude/projects/-Users-${user_slug}-IWE/memory" \
-    "$WORKSPACE_DIR/memory"
-  do
-    if [ -d "$candidate" ]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  return 1
-}
-
-MEMORY_SRC="${MEMORY_SRC:-$(resolve_memory_src || true)}"
-
-resolve_selective_reindex() {
-  local candidate
-  for candidate in \
-    "$WORKSPACE_DIR/DS-MCP/knowledge-mcp/scripts/selective-reindex.sh" \
-    "$WORKSPACE_DIR/knowledge-mcp/scripts/selective-reindex.sh" \
-    "$WORKSPACE_DIR/DS-IT-systems/DS-MCP/knowledge-mcp/scripts/selective-reindex.sh"
-  do
-    if [ -x "$candidate" ]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  return 1
-}
-
-resolve_linear_sync() {
-  local raw candidate
-  if [ -f "$PARAMS_YAML" ] && command -v python3 >/dev/null 2>&1; then
-    raw=$(python3 -c 'import sys; import yaml; d=yaml.safe_load(open(sys.argv[1])) or {}; print(d.get("linear_sync_path",""))' "$PARAMS_YAML" 2>/dev/null || true)
-    if [ -n "$raw" ]; then
-      candidate="${raw/#\~/$HOME}"
-      if [ -x "$candidate" ]; then
-        printf '%s\n' "$candidate"
-        return 0
-      fi
-    fi
-  fi
-
-  for candidate in \
-    "$WORKSPACE_DIR/DS-IT-systems/DS-ai-systems/synchronizer/scripts/linear-sync.sh" \
-    "$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/linear-sync.sh"
-  do
-    if [ -x "$candidate" ]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
-SELECTIVE_REINDEX="${SELECTIVE_REINDEX:-$(resolve_selective_reindex || true)}"
-LINEAR_SYNC="${LINEAR_SYNC:-$(resolve_linear_sync || true)}"
-
 # --- Шаг 1: Backup memory/ + CLAUDE.md → exocortex/ ---
 do_backup() {
   log "Шаг 1/3: Backup memory/ → exocortex/"
 
-  if [ -z "${MEMORY_SRC:-}" ] || [ ! -d "$MEMORY_SRC" ]; then
+  if [ ! -d "$MEMORY_SRC" ]; then
     err "Memory source not found: $MEMORY_SRC"
     return 1
   fi
@@ -132,12 +76,31 @@ do_backup() {
 do_reindex() {
   log "Шаг 2/3: Knowledge-MCP reindex"
 
-  if [ -z "${SELECTIVE_REINDEX:-}" ] || [ ! -x "$SELECTIVE_REINDEX" ]; then
-    warn "  selective-reindex.sh не найден: ${SELECTIVE_REINDEX:-not_configured_or_missing} — пропуск"
+  if [ ! -x "$SELECTIVE_REINDEX" ]; then
+    warn "  selective-reindex.sh не найден: $SELECTIVE_REINDEX — пропуск"
     return 0
   fi
 
-  local changed_sources=""
+  # Маппинг dir→source+config из L2 (sources.json) и L4 (sources-personal.json)
+  # Python резолвит path→git-root, чтобы связать dirname репо с source-именем.
+  local dir_map
+  dir_map=$(python3 - "$SOURCES_JSON" "$SOURCES_PERSONAL_JSON" << 'PYEOF'
+import sys, json, os
+for config_path in sys.argv[1:]:
+    if not os.path.exists(config_path):
+        continue
+    for s in json.load(open(config_path)):
+        resolved = os.path.expanduser(s["path"])
+        while not os.path.isdir(os.path.join(resolved, ".git")) and resolved != "/":
+            resolved = os.path.dirname(resolved)
+        if resolved == "/":
+            continue
+        print(f"{os.path.basename(resolved)}\t{s['source']}\t{config_path}")
+PYEOF
+  ) || { warn "  Mapping build failed — пропуск reindex"; return 0; }
+
+  # Определяем, какие Pack/DS были изменены сегодня
+  local l2_sources="" l4_sources=""
   for repo in "$WORKSPACE_DIR"/PACK-* "$WORKSPACE_DIR"/DS-*; do
     [ -d "$repo/.git" ] || continue
     local repo_name
@@ -145,26 +108,49 @@ do_reindex() {
     local today_commits
     today_commits=$(git -C "$repo" log --since="today 00:00" --oneline --no-merges 2>/dev/null | wc -l | tr -d ' ')
     if [ "$today_commits" -gt 0 ]; then
-      changed_sources="$changed_sources $repo_name"
+      local match
+      match=$(echo "$dir_map" | awk -F'\t' -v d="$repo_name" '$1==d {print $2"\t"$3; exit}')
+      if [ -n "$match" ]; then
+        local src cfg
+        src=$(echo "$match" | cut -f1)
+        cfg=$(echo "$match" | cut -f2)
+        if [ "$cfg" = "$SOURCES_JSON" ]; then
+          l2_sources="$l2_sources $src"
+        else
+          l4_sources="$l4_sources $src"
+        fi
+      else
+        log "  ⚠ $repo_name: не в sources — пропуск"
+      fi
     fi
   done
 
-  if [ -z "$changed_sources" ]; then
-    log "  Нет изменений в Pack/DS сегодня — пропуск reindex"
+  if [ -z "$l2_sources" ] && [ -z "$l4_sources" ]; then
+    log "  Нет изменений в индексируемых источниках — пропуск reindex"
     return 0
   fi
 
-  log "  Изменённые источники:$changed_sources"
-  # shellcheck disable=SC2086
-  "$SELECTIVE_REINDEX" $changed_sources
+  # Вызов 1: L2 источники (sources.json — дефолт selective-reindex)
+  if [ -n "$l2_sources" ]; then
+    log "  L2 источники:$l2_sources"
+    # shellcheck disable=SC2086
+    "$SELECTIVE_REINDEX" $l2_sources
+  fi
+
+  # Вызов 2: L4 источники (sources-personal.json через SOURCES_CONFIG)
+  if [ -n "$l4_sources" ]; then
+    log "  L4 источники:$l4_sources"
+    # shellcheck disable=SC2086
+    SOURCES_CONFIG="$SOURCES_PERSONAL_JSON" "$SELECTIVE_REINDEX" $l4_sources
+  fi
 }
 
 # --- Шаг 3: Linear sync ---
 do_linear() {
   log "Шаг 3/3: Linear sync"
 
-  if [ -z "${LINEAR_SYNC:-}" ] || [ ! -x "$LINEAR_SYNC" ]; then
-    warn "  linear-sync.sh не найден: ${LINEAR_SYNC:-not_configured_or_missing} — пропуск"
+  if [ ! -x "$LINEAR_SYNC" ]; then
+    warn "  linear-sync.sh не найден: $LINEAR_SYNC — пропуск"
     return 0
   fi
 
@@ -229,11 +215,6 @@ main() {
 
   log "=== Готово ==="
   log "  backup=$backup_status  reindex=$reindex_status  linear=$linear_status"
-
-  if [ "$backup_status" = "fail" ]; then
-    err "Day Close failed: backup step is mandatory"
-    exit 1
-  fi
 }
 
 main "$@"

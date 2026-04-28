@@ -4,7 +4,7 @@
 
 ## Контекст
 
-- Планы: {{WORKSPACE_DIR}}/DS-strategy/current/
+- Планы: /Users/alexander/Github/{{GOVERNANCE_REPO}}/current/
 
 ## Алгоритм
 
@@ -20,10 +20,10 @@
    - Предупреди если превышение
 
 3. **Добавление:**
-   - Найди последний WeekPlan в DS-strategy/current/
+   - Найди последний WeekPlan в {{GOVERNANCE_REPO}}/current/
    - Добавь РП в таблицу
    - Обнови бюджет
-   - Обнови `memory/MEMORY.md`
+   - Обнови MEMORY.md
    - Закоммить
 
 Результат: РП добавлен в план недели.

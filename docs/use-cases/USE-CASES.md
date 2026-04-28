@@ -2,7 +2,7 @@
 
 > **Что здесь:** Полный каталог того, что IWE умеет делать для тебя. Каждый сценарий — это обещание платформы: конкретная ценность, которую ты получаешь.
 >
-> **Source-of-truth:** [PACK-digital-platform/08-use-cases/](../../../PACK-digital-platform/pack/digital-platform/08-use-cases/) — доменные сценарии. Этот файл — проекция для пользователя.
+> **Source-of-truth:** [PACK-digital-platform/08-service-clauses/](../../../PACK-digital-platform/pack/digital-platform/08-service-clauses/) — доменные сценарии. Этот файл — проекция для пользователя.
 
 ---
 
@@ -76,7 +76,7 @@
 - Быструю фиксацию мыслей (TG → файл, < 2 мин)
 - Capture-to-Pack — анонсирование знания в момент обнаружения
 - Extraction Report — формализованные Pack-сущности
-- Обновлённую онтологию для knowledge-mcp
+- Обновлённую онтологию для знаниевого поиска через Gateway
 
 **Как это работает:** Пишешь `.заметка текст` в TG — через 2 мин она в fleeting-notes.md. В рабочих сессиях Claude анонсирует Capture. Ночью экстрактор формализует captures в Pack-сущности.
 
@@ -103,7 +103,7 @@
 **Что получаешь:**
 - Все ⏰-сервисы работают по расписанию без вмешательства
 - Ежедневный отчёт о коммитах во всех репо
-- Актуальные YAML-проекции для knowledge-mcp
+- Актуальные YAML-проекции для знаниевого поиска через Gateway
 - Шаблон FMT обновляется и проверяется автоматически
 
 **Как это работает:** Scheduler Dispatch (10x/день) запускает агентов. Code Scan, Pack Projection, Template Sync — всё отрабатывает ночью. К утру — всё готово.
@@ -217,9 +217,9 @@
 - Формализованные сущности — методы, различения, failure modes, SOTA, рабочие продукты
 - Валидация по SPF — каждая сущность проверена на соответствие формату
 - Связи через frontmatter — доступны через MAP.001
-- Обновлённая онтология — knowledge-mcp получает новые сущности
+- Обновлённая онтология — Gateway (iwe-knowledge) получает новые сущности
 
-**Как это работает:** Captures из рабочих сессий → Knowledge Extraction формализует в Pack-сущности (ID, frontmatter, status) → Ontology Sync обновляет knowledge-mcp → сущности доступны боту и агентам.
+**Как это работает:** Captures из рабочих сессий → Knowledge Extraction формализует в Pack-сущности (ID, frontmatter, status) → Ontology Sync обновляет знаниевый индекс → сущности доступны боту и агентам через Gateway (iwe-knowledge).
 
 ---
 
@@ -238,5 +238,5 @@
 
 ---
 
-*Source-of-truth: PACK-digital-platform/pack/digital-platform/08-use-cases/*
+*Source-of-truth: PACK-digital-platform/pack/digital-platform/08-service-clauses/*
 *Обновлено: 2026-03-17*

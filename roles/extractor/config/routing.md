@@ -12,15 +12,11 @@
 
 | Домен | Pack | Префикс | Путь |
 |-------|------|---------|------|
-| VK Coffee бар, бариста, напитки, эспрессо, капучино, латте, кофемашина, молочная пена, темпер, пролив, помол, латте-арт, касса, кассовые операции | PACK-bar | BAR | {{WORKSPACE_DIR}}/VK-offee/PACK-bar/ |
-| VK Coffee кухня, повар, блюда, боул, сэндвич, салат, заготовки, ингредиенты, рецепты, ТТК, себестоимость, калькуляция, списание, переработка, производственная система | PACK-kitchen | KITCHEN | {{WORKSPACE_DIR}}/VK-offee/PACK-kitchen/ |
-| VK Coffee обслуживание, официант, раннер, гость, заказ, подача, сервировка, доставка заказов, уборка столов, стандарты обслуживания | PACK-service | SERVICE | {{WORKSPACE_DIR}}/VK-offee/PACK-service/ |
-| VK Coffee управление, менеджер смены, смена, план смены, контроль качества, отчёт смены, стандарты, координация, калькуляция смены | PACK-management | MGMT | {{WORKSPACE_DIR}}/VK-offee/PACK-management/ |
-| VK Coffee персонал, найм, обучение, адаптация, должностная инструкция, график работы, онбординг, оценка персонала, карьерное развитие, HR | PACK-hr | HR | {{WORKSPACE_DIR}}/VK-offee/PACK-hr/ |
-| IWE, культура работы, протоколы работы, навыки, различения, методы, экзокортекс, capture, стоп-кран, рабочая дисциплина | PACK-iwe-culture | IWE | {{WORKSPACE_DIR}}/PACK-iwe-culture/ |
-| VK-offee парк, архитектура, вывеска, дизайн, архитектурный проект, благоустройство, смета, подрядчик, ремонт, строительство, объект | PACK-park-development | PARK | {{WORKSPACE_DIR}}/VK-offee/PACK-park-development/ |
-| VK-offee кафе-операции, операционный учёт, аналитика, Saby, выручка, оборот, P&L, меню, маркетинг, продукт, привлекательность | PACK-cafe-operations | CO | {{WORKSPACE_DIR}}/VK-offee/PACK-cafe-operations/ |
-| Точка Самокиша, объект на Самокиша, отделка точки, монтаж, оборудование конкретной точки, POINT-samokisha | POINT-samokisha | POINT | {{WORKSPACE_DIR}}/VK-offee/POINT-samokisha/ |
+| _Твой домен (напр. Machine Learning)_ | _PACK-my-domain_ | _MD_ | _/Users/alexander/Github/PACK-my-domain/pack/my-domain/_ |
+
+<!-- Удали пример выше и добавь свои Pack'и. Формат:
+| Домен (ключевые слова) | Имя Pack-репо | Короткий префикс (2-3 буквы) | Путь к pack/ директории |
+-->
 
 ## 2. Директории по типу знания
 
@@ -33,7 +29,7 @@
 | Failure mode | `fm` | `05-failure-modes/` | Отдельный файл |
 | Характеристика | `chr` | `06-characteristics/` | Отдельный файл |
 | SoTA-аннотация | `sota` | `08-sota/` | Отдельный файл |
-| Правило (глобальное) | `rule` | `{{WORKSPACE_DIR}}/CLAUDE.md` | Строки |
+| Правило (глобальное) | `rule` | `/Users/alexander/Github/CLAUDE.md` | Строки |
 | Правило (локальное) | `rule` | `<repo>/CLAUDE.md` | Строки |
 | Правило (урок) | `rule` | `memory/<topic>.md` | Строки |
 
@@ -54,7 +50,7 @@
 
 1. **Домен?** → определи Pack по таблице 1
 2. **Тип знания?** → определи директорию по таблице 2
-3. **MCP-проверка:** `knowledge-mcp search("тема кандидата")` → нет ли уже в базе?
+3. **MCP-проверка:** `knowledge_search("тема кандидата")` → нет ли уже в базе?
 4. **Проверка bounded context:** Прочитай `00-pack-manifest.md` целевого Pack'а — попадает ли кандидат в scope?
 5. **Если не попадает ни в один Pack** → предложи defer и уточни у пользователя
 
@@ -76,7 +72,7 @@
 
 | Система | DS-репо | Путь к docs/ |
 |---------|--------|-------------|
-| _Мой бот_ | _DS-IT-systems/my-bot_ | _{{WORKSPACE_DIR}}/DS-IT-systems/my-bot/docs/_ |
+| _Мой бот_ | _your-org/my-bot_ | _/Users/alexander/Github/your-org/my-bot/docs/_ |
 
 <!-- Удали пример и добавь свои DS-репо -->
 
@@ -114,4 +110,4 @@ DS-кандидаты **не требуют** frontmatter с trust/epistemic_sta
 
 ---
 
-*Последнее обновление: 2026-04-11*
+*Последнее обновление: {{сегодняшняя дата}}*
