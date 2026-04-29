@@ -28,7 +28,7 @@
 
 set -eu
 
-IWE_ROOT="${IWE_ROOT:-$HOME/IWE}"
+IWE_ROOT="${IWE_ROOT:-${IWE_WORKSPACE:-$HOME/IWE}}"
 DRIFT_CRITICAL=""
 
 while [ $# -gt 0 ]; do

@@ -30,7 +30,7 @@ portable_date_offset() {
 }
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WORKSPACE="$HOME/IWE"
+WORKSPACE="${WORKSPACE_DIR:-${IWE_WORKSPACE:-$HOME/IWE}}"
 GOVERNANCE_DIR="${GOVERNANCE_DIR:-$WORKSPACE/DS-strategy}"
 LOG_DIR="$HOME/logs/synchronizer"
 DATE=$(date +%Y-%m-%d)
@@ -142,7 +142,7 @@ print(json.dumps(result))
 }
 
 # ============================================================
-# 2. Git Stats (все репо в /Users/alexander/Github/)
+# 2. Git Stats (все репо в workspace)
 # ============================================================
 
 collect_git() {
@@ -150,7 +150,7 @@ collect_git() {
 import subprocess, json, os
 from datetime import datetime, timedelta
 
-workspace = os.path.expanduser('/Users/alexander/Github')
+workspace = os.path.expanduser('$WORKSPACE')
 repos = []
 for name in sorted(os.listdir(workspace)):
     path = os.path.join(workspace, name)
@@ -261,7 +261,7 @@ if os.path.exists(log_path):
 
 # Also count from git log (more reliable — sessions leave commits)
 import subprocess
-workspace = os.path.expanduser('/Users/alexander/Github')
+workspace = os.path.expanduser('$WORKSPACE')
 git_sessions_7d = 0
 for name in os.listdir(workspace):
     path = os.path.join(workspace, name)
@@ -290,7 +290,7 @@ print(json.dumps(result))
 # ============================================================
 
 collect_wp() {
-    local MEMORY_FILE="$HOME/.claude/projects/-Users-$(whoami)-IWE/memory/MEMORY.md"
+    local MEMORY_FILE="$HOME/.claude/projects/${CLAUDE_PROJECT_SLUG:--Users-$(whoami)-IWE}/memory/MEMORY.md"
 
     python3 -c "
 import json, os, re
@@ -618,7 +618,7 @@ collect_pack() {
     python3 -c "
 import json, os, re
 
-workspace = os.path.expanduser('/Users/alexander/Github')
+workspace = os.path.expanduser('$WORKSPACE')
 pack_stats = {}
 total_md = 0
 total_entities = 0

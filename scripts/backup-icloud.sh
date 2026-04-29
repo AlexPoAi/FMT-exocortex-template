@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-IWE_DIR="${WORKSPACE_DIR:-$HOME/IWE}"
+IWE_DIR="${WORKSPACE_DIR:-${IWE_WORKSPACE:-$HOME/IWE}}"
 ICLOUD_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/IWE-backups"
 DATE=$(date +%Y%m%d-%H%M)
 ARCHIVE="IWE-backup-${DATE}.tar.gz"
