@@ -15,9 +15,17 @@
 set -euo pipefail
 
 # === КОНФИГУРАЦИЯ (настроить при установке) ===
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/IWE}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-${IWE_WORKSPACE:-$HOME/IWE}}"
 DS_STRATEGY="$WORKSPACE_DIR/DS-strategy"
-MEMORY_SRC="$HOME/.claude/projects/-Users-$(whoami)-IWE/memory"
+CLAUDE_PROJECT_SLUG="${CLAUDE_PROJECT_SLUG:-}"
+if [ -z "$CLAUDE_PROJECT_SLUG" ] && [ -f "$WORKSPACE_DIR/.exocortex.env" ]; then
+  CLAUDE_PROJECT_SLUG=$(grep -E '^CLAUDE_PROJECT_SLUG=' "$WORKSPACE_DIR/.exocortex.env" | head -1 | cut -d= -f2- || true)
+fi
+if [ -n "$CLAUDE_PROJECT_SLUG" ]; then
+  MEMORY_SRC="$HOME/.claude/projects/$CLAUDE_PROJECT_SLUG/memory"
+else
+  MEMORY_SRC="$HOME/.claude/projects/-Users-$(whoami)-IWE/memory"
+fi
 EXOCORTEX_DST="$DS_STRATEGY/exocortex"
 # MCP reindex — опциональный компонент (WP-187 iwe-knowledge Gateway заменяет локальный knowledge-mcp).
 # Переопределить путь можно через env IWE_SELECTIVE_REINDEX.
