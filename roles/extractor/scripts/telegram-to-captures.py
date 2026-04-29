@@ -37,6 +37,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+TOKEN_URL_RE = re.compile(r"(api\.telegram\.org/bot)([0-9]{8,}:[A-Za-z0-9_-]{20,})")
+
+
+def redact_sensitive(value: str) -> str:
+    if not value:
+        return value
+    return TOKEN_URL_RE.sub(r"\1<TOKEN_REDACTED>", value)
+
+
+class RedactTelegramTokenFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = redact_sensitive(str(record.msg))
+        if record.args:
+            record.args = tuple(redact_sensitive(str(arg)) for arg in record.args)
+        return True
+
+
+for noisy_logger in ("httpx", "httpcore", "telegram", "telegram.ext"):
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+for handler in logging.getLogger().handlers:
+    handler.addFilter(RedactTelegramTokenFilter())
+
 
 def load_config(config_file: Path) -> dict:
     config = {}
@@ -169,7 +192,11 @@ def main():
             break  # Нормальный выход
 
         except Exception as e:
-            logger.error(f"Бот упал: {e.__class__.__name__}: {e}")
+            logger.error(
+                "Бот упал: %s: %s",
+                e.__class__.__name__,
+                redact_sensitive(str(e)),
+            )
             logger.info(f"Ждём {backoff} сек перед перезапуском...")
             time.sleep(backoff)
             backoff = min(backoff * 2, max_backoff)
