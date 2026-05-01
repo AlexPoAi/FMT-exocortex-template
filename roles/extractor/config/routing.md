@@ -13,6 +13,7 @@
 | Домен | Pack | Префикс | Путь |
 |-------|------|---------|------|
 | _Твой домен (напр. Machine Learning)_ | _PACK-my-domain_ | _MD_ | _/Users/alexander/Github/PACK-my-domain/pack/my-domain/_ |
+| IWE культура, ритуалы, агентные нормы | PACK-iwe-culture | IWC | /Users/alexander/Github/PACK-iwe-culture/ |
 
 <!-- Удали пример выше и добавь свои Pack'и. Формат:
 | Домен (ключевые слова) | Имя Pack-репо | Короткий префикс (2-3 буквы) | Путь к pack/ директории |
@@ -110,4 +111,4 @@ DS-кандидаты **не требуют** frontmatter с trust/epistemic_sta
 
 ---
 
-*Последнее обновление: {{сегодняшняя дата}}*
+*Последнее обновление: 2026-05-01*
