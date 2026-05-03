@@ -221,6 +221,35 @@ refresh_recovery_weekplan_context() {
     return 1
 }
 
+sync_telegram_captures_before_read() {
+    local scenario="${1:-strategist}"
+    local sync_script="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/sync-telegram-captures.sh"
+    local rc task
+
+    if [ "${TELEGRAM_CAPTURES_PRE_SYNC:-1}" = "0" ]; then
+        log "SKIP: telegram captures pre-sync disabled for $scenario"
+        return 0
+    fi
+
+    if [ ! -x "$sync_script" ]; then
+        log "ERROR: telegram captures sync script missing or not executable: $sync_script"
+        task="$(status_task_for_scenario "$scenario")"
+        write_status_artifact "$task" "failed" "18" "telegram captures sync script missing" "reported" "pre-read sync gate missing" "$sync_script" "false"
+        return 18
+    fi
+
+    log "Telegram captures pre-sync before strategist/$scenario"
+    if TELEGRAM_CAPTURES_SYNC_LOG_FILE="$LOG_FILE" TELEGRAM_CAPTURES_SYNC_QUIET=1 "$sync_script" "$WORKSPACE_ROOT"; then
+        return 0
+    else
+        rc=$?
+        log "ERROR: telegram captures pre-sync failed for strategist/$scenario (exit=$rc)"
+        task="$(status_task_for_scenario "$scenario")"
+        write_status_artifact "$task" "failed" "$rc" "telegram captures pre-sync failed" "reported" "DS-strategy pull from origin/main failed before strategist read" "pre-sync exit=$rc" "false"
+        return "$rc"
+    fi
+}
+
 status_task_for_scenario() {
     case "$1" in
         morning|session-prep|day-plan) echo "strategist-morning" ;;
@@ -932,12 +961,14 @@ case "$1" in
 
         if [ "$DAY_OF_WEEK" -eq "$STRATEGY_DAY_NUM" ]; then
             log "Strategy day ($STRATEGY_DAY_NAME): running session prep"
+            sync_telegram_captures_before_read "session-prep"
             refresh_recovery_brief || true
             refresh_recovery_weekplan_context || true
             run_claude "session-prep"
             notify_telegram "session-prep"
         else
             log "Morning: running day plan"
+            sync_telegram_captures_before_read "day-plan"
             run_claude "day-plan"
             notify_telegram "day-plan"
         fi
@@ -960,6 +991,7 @@ case "$1" in
         else
             log "Manual/unscheduled: running week review"
         fi
+        sync_telegram_captures_before_read "week-review"
         run_claude "week-review"
         # Fallback push for Knowledge Index (week-review creates a post there)
         KI_REPO="$(resolve_knowledge_index_dir || true)"
@@ -970,6 +1002,7 @@ case "$1" in
         ;;
     "session-prep")
         log "Manual: running session prep"
+        sync_telegram_captures_before_read "session-prep"
         refresh_recovery_brief || true
         refresh_recovery_weekplan_context || true
         run_claude "session-prep"
@@ -977,12 +1010,14 @@ case "$1" in
         ;;
     "day-plan")
         log "Manual: running day plan"
+        sync_telegram_captures_before_read "day-plan"
         run_claude "day-plan"
         notify_telegram "day-plan"
         ;;
     "note-review")
         acquire_lock "note-review"
         log "Evening: running note review"
+        sync_telegram_captures_before_read "note-review"
         # Canary: count bold notes before (exclude 🔄 — deferred ideas stay bold by design)
         FLEETING="$WORKSPACE/inbox/fleeting-notes.md"
         if [ ! -f "$FLEETING" ]; then
@@ -1042,6 +1077,7 @@ case "$1" in
         ;;
     "strategy-session")
         log "Manual: running strategy session (interactive)"
+        sync_telegram_captures_before_read "strategy-session"
         run_claude "strategy-session"
         ;;
     *)

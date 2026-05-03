@@ -187,6 +187,31 @@ UPDATED_AT=$(shell_quote "$now_ts")
 EOF
 }
 
+sync_telegram_captures_before_read() {
+    local scenario="${1:-extractor}"
+    local sync_script="$FMT_EXOCORTEX_DIR/roles/synchronizer/scripts/sync-telegram-captures.sh"
+    local rc
+
+    if [ "${TELEGRAM_CAPTURES_PRE_SYNC:-1}" = "0" ]; then
+        log "SKIP: telegram captures pre-sync disabled for $scenario"
+        return 0
+    fi
+
+    if [ ! -x "$sync_script" ]; then
+        log "ERROR: telegram captures sync script missing or not executable: $sync_script"
+        return 18
+    fi
+
+    log "Telegram captures pre-sync before extractor/$scenario"
+    if TELEGRAM_CAPTURES_SYNC_LOG_FILE="$LOG_FILE" TELEGRAM_CAPTURES_SYNC_QUIET=1 "$sync_script" "$WORKSPACE_ROOT"; then
+        return 0
+    else
+        rc=$?
+        log "ERROR: telegram captures pre-sync failed for extractor/$scenario (exit=$rc)"
+        return "$rc"
+    fi
+}
+
 load_env() {
     if [ -f "$ENV_FILE" ]; then
         set -a
@@ -789,6 +814,14 @@ case "${1:-}" in
         if ! acquire_lock "extractor-inbox-check"; then
             write_status_artifact "extractor-inbox-check" "running" "2" "another extractor process holds the scenario lock" "reported" "live lock detected" "" "false"
             exit 2
+        fi
+
+        if sync_telegram_captures_before_read "inbox-check"; then
+            :
+        else
+            rc=$?
+            write_status_artifact "extractor-inbox-check" "failed" "$rc" "telegram captures pre-sync failed" "reported" "DS-strategy pull from origin/main failed before reading captures" "pre-sync exit=$rc" "false"
+            exit "$rc"
         fi
 
         CAPTURES_FILE="$WORKSPACE/DS-strategy/inbox/captures.md"
