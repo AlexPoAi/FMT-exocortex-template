@@ -91,6 +91,6 @@ fi
 
 capture_headers="$(grep -E '^### ' "$CAPTURES_FILE" 2>/dev/null | grep -vE '^### \[Название знания\]$' || true)"
 total_captures="$(printf '%s\n' "$capture_headers" | sed '/^$/d' | wc -l | tr -d ' ')"
-pending_captures="$(printf '%s\n' "$capture_headers" | grep -vE '\[(analyzed|processed|duplicate|defer|rejected)([][:space:]]|$)' | sed '/^$/d' | wc -l | tr -d ' ')"
+pending_captures="$(printf '%s\n' "$capture_headers" | grep -vE '\[(analyzed|processed|duplicate|defer|rejected)\]' | sed '/^$/d' | wc -l | tr -d ' ')"
 
 log "OK: DS-strategy synced (after=$after_head, total=$total_captures, pending=$pending_captures)"
