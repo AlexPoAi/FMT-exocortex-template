@@ -13,15 +13,18 @@ PLIST_DIR="$HOME/Library/LaunchAgents"
 if [ -n "${IWE_RUNTIME:-}" ] && [ -d "$IWE_RUNTIME/roles/$ROLE_NAME/scripts/launchd" ]; then
     PLIST_SRC_DIR="$IWE_RUNTIME/roles/$ROLE_NAME/scripts/launchd"
     EXTRACTOR_TARGET="$IWE_RUNTIME/roles/$ROLE_NAME/scripts/extractor.sh"
-    WATCHER_TARGET="$IWE_RUNTIME/roles/$ROLE_NAME/scripts/session-watcher.sh"
+WATCHER_TARGET="$IWE_RUNTIME/roles/$ROLE_NAME/scripts/session-watcher.sh"
+    INTAKE_TARGET="$IWE_RUNTIME/roles/$ROLE_NAME/scripts/obsidian-fleeting-intake.sh"
 elif [ -n "${IWE_WORKSPACE:-}" ] && [ -d "$IWE_WORKSPACE/.iwe-runtime/roles/$ROLE_NAME/scripts/launchd" ]; then
     PLIST_SRC_DIR="$IWE_WORKSPACE/.iwe-runtime/roles/$ROLE_NAME/scripts/launchd"
     EXTRACTOR_TARGET="$IWE_WORKSPACE/.iwe-runtime/roles/$ROLE_NAME/scripts/extractor.sh"
     WATCHER_TARGET="$IWE_WORKSPACE/.iwe-runtime/roles/$ROLE_NAME/scripts/session-watcher.sh"
+    INTAKE_TARGET="$IWE_WORKSPACE/.iwe-runtime/roles/$ROLE_NAME/scripts/obsidian-fleeting-intake.sh"
 else
     PLIST_SRC_DIR="$SCRIPT_DIR/scripts/launchd"
     EXTRACTOR_TARGET="$SCRIPT_DIR/scripts/extractor.sh"
     WATCHER_TARGET="$SCRIPT_DIR/scripts/session-watcher.sh"
+    INTAKE_TARGET="$SCRIPT_DIR/scripts/obsidian-fleeting-intake.sh"
     echo "  ⚠ Legacy mode: используются плейсхолдеры из FMT-substituted (запустите setup.sh ≥0.29.0 для архитектуры F)"
 fi
 
@@ -62,14 +65,20 @@ fi
 if [ -f "$WATCHER_TARGET" ]; then
     chmod +x "$WATCHER_TARGET"
 fi
+if [ -f "$INTAKE_TARGET" ]; then
+    chmod +x "$INTAKE_TARGET"
+fi
 
 install_agent "Extractor launchd agent (inbox-check)" "com.extractor.inbox-check.plist"
 install_agent "Extractor launchd agent (session-watcher)" "com.extractor.session-watcher.plist"
+install_agent "Extractor launchd agent (obsidian-fleeting-intake)" "com.extractor.obsidian-fleeting-intake.plist"
 
 echo "  ✓ Installed: com.extractor.inbox-check"
 echo "  ✓ Installed: com.extractor.session-watcher"
+echo "  ✓ Installed: com.extractor.obsidian-fleeting-intake"
 echo "  ✓ Inbox interval: every 3 hours"
 echo "  ✓ Watcher interval: every 5 minutes"
+echo "  ✓ Obsidian fleeting intake interval: every 24 hours + on load"
 echo "  ✓ Logs: ~/logs/extractor/"
 echo ""
 echo "Verify: launchctl list | grep extractor"
