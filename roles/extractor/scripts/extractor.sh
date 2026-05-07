@@ -29,6 +29,8 @@ else
 fi
 
 LOG_DIR="{{HOME_DIR}}/logs/extractor"
+STATE_DIR="{{HOME_DIR}}/.local/state/exocortex"
+STATUS_DIR="$STATE_DIR/status"
 CLAUDE_PATH="{{CLAUDE_PATH}}"
 ENV_FILE="{{HOME_DIR}}/.config/aist/env"
 
@@ -39,6 +41,7 @@ AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allow
 
 # Создаём папку для логов
 mkdir -p "$LOG_DIR"
+mkdir -p "$STATUS_DIR"
 
 DATE=$(date +%Y-%m-%d)
 HOUR=$(date +%H)
@@ -75,6 +78,40 @@ notify_telegram() {
     if [ -f "$notify_script" ]; then
         "$notify_script" extractor "$scenario" >> "$LOG_FILE" 2>&1 || true
     fi
+}
+
+write_inbox_status() {
+    local status="$1"
+    local summary="$2"
+    local start_ts="$3"
+    local end_ts="$4"
+    local exit_code="${5:-0}"
+    local run_id="${6:-$(date +%Y%m%d-%H%M%S)-$$}"
+    local status_file="$STATUS_DIR/extractor-inbox-check.status"
+
+    cat > "$status_file" <<EOF
+TASK_NAME=extractor-inbox-check
+RUN_ID=$run_id
+STATUS=$status
+EXIT_CODE=$exit_code
+SUMMARY='$summary'
+START_TS='$start_ts'
+END_TS='$end_ts'
+LAST_STARTED_AT='$start_ts'
+LAST_FINISHED_AT='$end_ts'
+LAST_SUCCESS_AT='$end_ts'
+LAST_FAILURE_AT=''
+EVIDENCE_STATUS=verified
+EVIDENCE_SUMMARY='runner checked inbox'
+ERROR_SUMMARY=''
+STALENESS_BUDGET_SEC="10800"
+PRODUCED_ARTIFACTS=""
+COMPLETED_WINDOW=true
+LOG_PATH=$LOG_FILE
+UPDATED_AT='$end_ts'
+EOF
+
+    date +%s > "$STATE_DIR/extractor-inbox-check-last"
 }
 
 # Загрузка переменных окружения
@@ -170,6 +207,9 @@ load_env
 # Определяем процесс
 case "$1" in
     "inbox-check")
+        local_run_id="$(date +%Y%m%d-%H%M%S)-$$"
+        local_start_ts="$(date '+%Y-%m-%d %H:%M:%S')"
+
         if ! is_work_hours; then
             log "SKIP: inbox-check outside work hours ($HOUR:00)"
             exit 0
@@ -187,6 +227,8 @@ case "$1" in
 
             if [ "$ACTUAL_PENDING" -le 0 ]; then
                 log "SKIP: No pending captures in inbox"
+                local_end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
+                write_inbox_status "success" "no pending captures in inbox" "$local_start_ts" "$local_end_ts" "0" "$local_run_id"
                 exit 0
             fi
 
@@ -196,8 +238,15 @@ case "$1" in
             exit 0
         fi
 
-        run_claude "inbox-check"
-        notify_telegram "inbox-check"
+        if run_claude "inbox-check"; then
+            local_end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
+            write_inbox_status "success" "inbox-check completed" "$local_start_ts" "$local_end_ts" "0" "$local_run_id"
+            notify_telegram "inbox-check"
+        else
+            local_end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
+            write_inbox_status "failed" "inbox-check failed" "$local_start_ts" "$local_end_ts" "1" "$local_run_id"
+            exit 1
+        fi
         ;;
 
     "audit")

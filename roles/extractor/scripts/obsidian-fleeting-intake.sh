@@ -13,37 +13,37 @@ mkdir -p "$(dirname "$CAPTURES_FILE")"
 touch "$CAPTURES_FILE"
 
 if [ ! -d "$SRC_DIR" ]; then
-  echo "skip: source dir not found: $SRC_DIR"
-  exit 0
+    echo "skip: source dir not found: $SRC_DIR"
+    exit 0
 fi
 
 imported=0
 shopt -s nullglob
 for note in "$SRC_DIR"/*.md; do
-  [ -f "$note" ] || continue
-  base="$(basename "$note")"
-  stem="${base%.md}"
-  hash="$(shasum -a 256 "$note" | awk '{print $1}')"
+    [ -f "$note" ] || continue
+    base="$(basename "$note")"
+    stem="${base%.md}"
+    hash="$(shasum -a 256 "$note" | awk '{print $1}')"
 
-  if grep -Fq "[obsidian-source-hash: $hash]" "$CAPTURES_FILE"; then
-    continue
-  fi
+    if grep -Fq "[obsidian-source-hash: $hash]" "$CAPTURES_FILE"; then
+        continue
+    fi
 
-  {
-    echo ""
-    echo "## Capture: Obsidian fleeting — $stem"
-    echo ""
-    echo "- source: $note"
-    echo "- imported_at: $NOW_UTC"
-    echo "- obsidian-source-hash: $hash"
-    echo ""
-    cat "$note"
-    echo ""
-    echo "---"
-  } >> "$CAPTURES_FILE"
+    {
+        echo ""
+        echo "## Capture: Obsidian fleeting — $stem"
+        echo ""
+        echo "- source: $note"
+        echo "- imported_at: $NOW_UTC"
+        echo "- obsidian-source-hash: $hash"
+        echo ""
+        cat "$note"
+        echo ""
+        echo "---"
+    } >> "$CAPTURES_FILE"
 
-  mv "$note" "$ARCHIVE_DIR/$TODAY - $base"
-  imported=$((imported + 1))
+    mv "$note" "$ARCHIVE_DIR/$TODAY - $base"
+    imported=$((imported + 1))
 done
 
 echo "obsidian-fleeting-intake: imported=$imported"

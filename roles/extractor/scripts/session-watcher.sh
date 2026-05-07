@@ -29,7 +29,6 @@ LOG_FILE="$LOG_DIR/$(date +%Y-%m-%d).log"
 
 mkdir -p "$LOG_DIR" "$PROCESSED_DIR" "$PENDING_DIR"
 
-# Снимаем блокировку вложенных сессий Claude Code
 unset CLAUDECODE
 
 log() {
@@ -81,7 +80,6 @@ queue_obsidian_sessions() {
     fi
 }
 
-# Проверяем есть ли файлы в очереди. `find` не роняет watcher при пустой очереди.
 queue_obsidian_sessions "$SESSION_DIR"
 queue_obsidian_sessions "$LEGACY_SESSION_DIR"
 
@@ -116,6 +114,6 @@ for session_file in "$PENDING_DIR"/*.md; do
     fi
 
     mv "$session_file" "$PROCESSED_DIR/$fname"
-    log "✅ Готово: $fname → processed-sessions/ (knowledge + tasks)"
+    log "✅ Готово: $fname -> processed-sessions/ (knowledge + tasks)"
     bash "$CHAIN_REPORT" "$PROCESSED_DIR/$fname" | tee -a "$LOG_FILE"
 done

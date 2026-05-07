@@ -404,6 +404,8 @@ check_legacy_launchd_conflicts() {
 
 check_strategist_notify_contract() {
     local template="$WORKSPACE_DIR/FMT-exocortex-template/roles/synchronizer/scripts/templates/strategist.sh"
+    local rendered_template="$template"
+    local tmp_template=""
     local message=""
 
     if [ ! -f "$template" ]; then
@@ -412,7 +414,32 @@ check_strategist_notify_contract() {
         return
     fi
 
-    message=$(bash -lc "source '$template' && build_message week-review" 2>/dev/null || true)
+    if grep -qE '\{\{[A-Z_]+\}\}' "$template" 2>/dev/null; then
+        tmp_template=$(mktemp)
+        workspace_val="${WORKSPACE_DIR:-$HOME/Github}"
+        home_val="${HOME_DIR:-$HOME}"
+        gov_repo_val="${IWE_GOVERNANCE_REPO:-DS-strategy}"
+        iwe_template_val="${IWE_TEMPLATE:-$workspace_val/FMT-exocortex-template}"
+        iwe_runtime_val="${IWE_RUNTIME:-$workspace_val/.iwe-runtime}"
+        github_user_val="${GITHUB_USER:-AlexPoAi}"
+        claude_slug_val="${CLAUDE_PROJECT_SLUG:-$(echo "$workspace_val" | tr '/' '-')}"
+
+        esc() { printf '%s' "$1" | sed 's/[&|]/\\&/g'; }
+
+        sed \
+            -e "s|{{WORKSPACE_DIR}}|$(esc "$workspace_val")|g" \
+            -e "s|{{HOME_DIR}}|$(esc "$home_val")|g" \
+            -e "s|{{GOVERNANCE_REPO}}|$(esc "$gov_repo_val")|g" \
+            -e "s|{{IWE_TEMPLATE}}|$(esc "$iwe_template_val")|g" \
+            -e "s|{{IWE_RUNTIME}}|$(esc "$iwe_runtime_val")|g" \
+            -e "s|{{GITHUB_USER}}|$(esc "$github_user_val")|g" \
+            -e "s|{{CLAUDE_PROJECT_SLUG}}|$(esc "$claude_slug_val")|g" \
+            "$template" > "$tmp_template"
+        rendered_template="$tmp_template"
+    fi
+
+    message=$(bash -lc "source '$rendered_template' && build_message week-review" 2>/dev/null || true)
+    [ -n "$tmp_template" ] && rm -f "$tmp_template"
 
     if [ -z "$message" ]; then
         ERRORS+=("🔴 Strategist notify contract broken: week-review template returned empty message")

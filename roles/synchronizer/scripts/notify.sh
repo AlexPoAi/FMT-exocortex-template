@@ -15,6 +15,11 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TEMPLATES_DIR="$SCRIPT_DIR/templates"
 ENV_FILE="$HOME/.config/aist/env"
+RESOLVE_WORKSPACE_SH="$SCRIPT_DIR/resolve-workspace.sh"
+
+if [ -x "$RESOLVE_WORKSPACE_SH" ]; then
+    eval "$(bash "$RESOLVE_WORKSPACE_SH" --env)"
+fi
 
 AVAILABLE=$(ls "$TEMPLATES_DIR"/*.sh 2>/dev/null | xargs -I{} basename {} .sh | tr '\n' '|' | sed 's/|$//')
 AGENT="${1:?Ошибка: укажи агента (${AVAILABLE:-нет шаблонов})}"
@@ -82,7 +87,35 @@ if [ ! -f "$TEMPLATE" ]; then
     exit 1
 fi
 
-source "$TEMPLATE"
+rendered_template="$TEMPLATE"
+if grep -qE '\{\{[A-Z_]+\}\}' "$TEMPLATE" 2>/dev/null; then
+    tmp_template=$(mktemp)
+
+    workspace_val="${WORKSPACE_DIR:-$HOME/Github}"
+    home_val="${HOME_DIR:-$HOME}"
+    gov_repo_val="${IWE_GOVERNANCE_REPO:-DS-strategy}"
+    iwe_template_val="${IWE_TEMPLATE:-$workspace_val/FMT-exocortex-template}"
+    iwe_runtime_val="${IWE_RUNTIME:-$workspace_val/.iwe-runtime}"
+    github_user_val="${GITHUB_USER:-AlexPoAi}"
+    claude_slug_val="${CLAUDE_PROJECT_SLUG:-$(echo "$workspace_val" | tr '/' '-')}"
+
+    esc() { printf '%s' "$1" | sed 's/[&|]/\\&/g'; }
+
+    sed \
+        -e "s|{{WORKSPACE_DIR}}|$(esc "$workspace_val")|g" \
+        -e "s|{{HOME_DIR}}|$(esc "$home_val")|g" \
+        -e "s|{{GOVERNANCE_REPO}}|$(esc "$gov_repo_val")|g" \
+        -e "s|{{IWE_TEMPLATE}}|$(esc "$iwe_template_val")|g" \
+        -e "s|{{IWE_RUNTIME}}|$(esc "$iwe_runtime_val")|g" \
+        -e "s|{{GITHUB_USER}}|$(esc "$github_user_val")|g" \
+        -e "s|{{CLAUDE_PROJECT_SLUG}}|$(esc "$claude_slug_val")|g" \
+        "$TEMPLATE" > "$tmp_template"
+
+    rendered_template="$tmp_template"
+fi
+
+source "$rendered_template"
+[ "$rendered_template" != "$TEMPLATE" ] && rm -f "$rendered_template"
 
 MESSAGE=$(build_message "$SCENARIO")
 BUTTONS=$(build_buttons "$SCENARIO" 2>/dev/null || echo "[]")
