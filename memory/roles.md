@@ -1,6 +1,16 @@
 ---
 valid_from: 2026-04-06
 originSessionId: 9a0e726a-951e-4408-9e02-94d7eeffbf74
+
+type: reference
+horizon: warm
+domains: [reference]
+status: active
+owner: user
+schema_version: 1
+
+name: "roles"
+description: "Операционный файл памяти IWE"
 ---
 # Роли платформы (lookup)
 
@@ -56,7 +66,7 @@ originSessionId: 9a0e726a-951e-4408-9e02-94d7eeffbf74
 | ID | Роль | Носитель | FX | Что делает |
 |----|------|----------|----|-----------|
 | R14 | Заказчик | Чел. | — | Формулирует задачи для Claude |
-| R15 | Валидатор | Чел. | — | Human-in-the-loop: одобряет KE, решения, PR |
+| R15 | Валидатор | Чел. | — | Human-in-the-loop: одобряет KE, решения, PR (`/apply-captures` skill) |
 | R16 | Ученик | Чел. | — | Учится в боте (марафон/лента) |
 | R17 | Стратег (интерактив) | Чел. | — | Участвует в strategy-session |
 | R18 | Автор заметок | Чел. | — | Пишет .заметки в TG → fleeting-notes |
@@ -66,7 +76,6 @@ originSessionId: 9a0e726a-951e-4408-9e02-94d7eeffbf74
 | R25 | Рецензент-верификатор | Чел. | — | Экспертная оценка содержания (ИИ Opus или человек) |
 | R26 | Приёмщик | Чел. | — | Решение pass/fail на основе verdict (обычно = R15 Валидатор) |
 
----
 
 ## Специфика: R4 Автор — презентации (МИМ)
 

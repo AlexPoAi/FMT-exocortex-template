@@ -30,9 +30,7 @@ substituted:
 
   # Extractor (извлечение знаний)
   - roles/extractor/scripts/launchd/com.extractor.inbox-check.plist
-  - roles/extractor/scripts/launchd/com.extractor.session-watcher.plist
   - roles/extractor/scripts/extractor.sh
-  - roles/extractor/scripts/session-watcher.sh
   - roles/extractor/config/routing.md
 
   # Synchronizer (фоновая синхронизация, scheduler)

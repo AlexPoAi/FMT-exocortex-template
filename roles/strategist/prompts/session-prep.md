@@ -1,14 +1,11 @@
 Выполни сценарий «Подготовка к сессии стратегирования» для роли Стратег (R1).
 
-Источник сценария: {{WORKSPACE_DIR}}/PACK-digital-platform/pack/digital-platform/02-domain-entities/DP.ROLE.012-strategist/scenarios/scheduled/01-strategy-session.md
 
 ## Контекст
 
-- **HUB (личные планы):** {{WORKSPACE_DIR}}/DS-strategy/current/
-- **Документы стратегии:** {{WORKSPACE_DIR}}/DS-strategy/docs/ (ВСЕ файлы: Strategy.md, Dissatisfactions.md, Session Agenda.md)
-- **Inbox:** {{WORKSPACE_DIR}}/DS-strategy/inbox/ ([fleeting-notes.md](https://github.com/{{GITHUB_USER}}/DS-strategy/blob/main/inbox/fleeting-notes.md) + свежие файлы за неделю)
-- **Recovery:** {{WORKSPACE_DIR}}/DS-strategy/inbox/RECOVERY-CATALOG-LOST-INPUTS-*.md
-- **Recovery Brief:** {{WORKSPACE_DIR}}/DS-strategy/current/RECOVERY-BRIEF.md
+- **HUB (личные планы):** {{WORKSPACE_DIR}}/{{GOVERNANCE_REPO}}/current/
+- **Документы стратегии:** {{WORKSPACE_DIR}}/{{GOVERNANCE_REPO}}/docs/ (ВСЕ файлы: Strategy.md, Dissatisfactions.md, Session Agenda.md)
+- **Inbox:** {{WORKSPACE_DIR}}/{{GOVERNANCE_REPO}}/inbox/ ([fleeting-notes.md](https://github.com/{{GITHUB_USER}}/{{GOVERNANCE_REPO}}/blob/main/inbox/fleeting-notes.md) + свежие файлы за неделю)
 - **SPOKE (планы репо):** {{WORKSPACE_DIR}}/*/WORKPLAN.md
 - **Стратегические карты:** {{WORKSPACE_DIR}}/*/MAPSTRATEGIC.md (если есть в репо)
 - **MEMORY:** ~/.claude/projects/{{CLAUDE_PROJECT_SLUG}}/memory/MEMORY.md
@@ -16,7 +13,7 @@
 ## Именование файлов в current/
 
 ```
-DS-strategy/
+{{GOVERNANCE_REPO}}/
 ├── current/
 │   ├── WeekPlan W{N} YYYY-MM-DD.md    # план недели (Пн дата)
 │   └── DayPlan YYYY-MM-DD.md          # план дня
@@ -25,7 +22,7 @@ DS-strategy/
 ├── inbox/                              # fleeting-notes.md + входящие
 ```
 
-В `current/` — только актуальные файлы. Старые перемещаются в `DS-strategy/archive/`.
+В `current/` — только актуальные файлы. Старые перемещаются в `{{GOVERNANCE_REPO}}/archive/`.
 
 ## Предусловие
 
@@ -39,51 +36,43 @@ DS-strategy/
 
 #### 1. Прочитать итоги прошлой недели (→ блок «Ревью прошлой недели»)
 
-- Найди секцию «Итоги W{N-1}» в текущем `WeekPlan W*.md` в `DS-strategy/current/`
+- Найди секцию «Итоги W{N-1}» в текущем `WeekPlan W*.md` в `{{GOVERNANCE_REPO}}/current/`
 - Извлеки: completion rate, carry-over, инсайты
 
 > Если секция итогов не найдена — сообщить об ошибке и собрать коммиты самостоятельно (fallback).
 
 #### 2. Обработать inbox (→ блок «Разбор inbox и исчезающих заметок»)
 
-- Прочитай `DS-strategy/inbox/fleeting-notes.md`
-- Прочитай ВСЕ файлы из `DS-strategy/inbox/` (кроме .DS_Store и .docx)
-- Прочитай актуальный `RECOVERY-CATALOG-LOST-INPUTS-*.md` (если есть) и выдели элементы со статусами `new` / `needs source recovery` / `active`
-- Прочитай `DS-strategy/current/RECOVERY-BRIEF.md` (если есть) как compact source-of-truth для recovery-return loop
+- Прочитай `{{GOVERNANCE_REPO}}/inbox/fleeting-notes.md`
+- Прочитай ВСЕ файлы из `{{GOVERNANCE_REPO}}/inbox/` (кроме .DS_Store и .docx)
 - Прочитай QA-отчёт бота: `DS-agent-workspace/scheduler/feedback-triage/` (последний по дате) — **структурированный отчёт** из feedback_triage DB: замечания (✏️) первые, urgent (high/critical) вторые, кластеры проблем третьи. Auto-triage уже выполнен ботом → Session-Prep проверяет кластеры (≥3 = **urgent** → WP-debt) и помечает resolved
 - Для каждой заметки/файла определи: → в план недели? → capture в Pack? → в повестку для обсуждения? → удалить?
 - **Недельная агрегация Inbox Triage:**
-  > Это НЕ дубль ежедневного triage Note-Review. Note-Review классифицирует заметки и пишет предложения в целевые документы. Session-Prep агрегирует результаты за неделю из этих документов + добавляет unsatisfied-questions + возвращает recovery items в weekly/backlog контур.
+  > Это НЕ дубль ежедневного triage Note-Review. Note-Review классифицирует заметки и пишет предложения в целевые документы. Session-Prep агрегирует результаты за неделю из этих документов + добавляет unsatisfied-questions.
   1. Собери ВСЕ оставшиеся `🔄` заметки (идеи, висящие >7 дней)
   2. Собери все непринятые предложения из прошлых Note-Review (если остались в WeekPlan)
-  3. Собери recovery items из `RECOVERY-CATALOG-LOST-INPUTS-*.md`, которые ещё не имеют явного weekly/backlog решения
-  4. Сформируй блок `📋 Inbox Triage (недельный)` с 4 корзинами:
+  3. Сформируй блок `📋 Inbox Triage (недельный)` с 3 корзинами:
      - ✅ Архив: заметки, чьи задачи закрыты за неделю (по итогам в WeekPlan)
      - 📌 Предложения в РП: из заметок-задач + из `🔄`, у которых появился scope
-     - ♻️ Recovery return loop: recovered элементы, которые нужно вернуть в WeekPlan / backlog / отдельный WP
      - ❓ На решение: `🔄` без scope, непринятые предложения, спорные
-  5. Для каждого recovery item дай явный verdict:
-     - `→ WeekPlan` — входит в план недели
-     - `→ INBOX backlog` — остаётся в backlog с понятным следующим шагом
-     - `→ keep in recovery` — данных пока недостаточно, но элемент не потерян
-  6. Включи этот блок в WeekPlan (секция повестки)
+  4. Включи этот блок в WeekPlan (секция повестки)
 - **WP Context Files** (`WP-*.md`): обработай отдельно:
-  - Проверь: РП ещё актуален? Сверь `status` в фронтматтере WP-файла с `memory/MEMORY.md`
-  - Если фронтматтер и `memory/MEMORY.md` расходятся — **доверяй `memory/MEMORY.md`** (source-of-truth статуса)
+  - Проверь: РП ещё актуален? Сверь `status` в фронтматтере WP-файла с MEMORY.md
+  - Если фронтматтер и MEMORY.md расходятся — **доверяй MEMORY.md** (source-of-truth статуса)
   - Если РП done/merged/drop → будет заархивирован на шаге 8.5 (Session-Prep — единственный владелец этой обязанности)
   - Если РП active — учесть «Текущее состояние» при формировании WeekPlan (блокеры, следующие шаги)
 - Сформируй блок повестки с рекомендациями по каждому элементу inbox
 
 #### 3. Проверить неудовлетворённости (→ блок «НЭП»)
 
-- Прочитай `DS-strategy/docs/Dissatisfactions.md`
+- Прочитай `{{GOVERNANCE_REPO}}/docs/Dissatisfactions.md`
 - Проверь: какие операционные НЭП разрешены (можно закрыть)?
 - Проверь: есть ли стратегические НЭП без привязки к РП на этой неделе?
 - Сформируй блок повестки с предложениями
 
 #### 4. Сверка со стратегией + агрегация MAPSTRATEGIC (→ блок «Стратегическая сверка»)
 
-- Прочитай `DS-strategy/docs/Strategy.md` — фокусы года, Q1 цели, приоритеты месяца
+- Прочитай `{{GOVERNANCE_REPO}}/docs/Strategy.md` — фокусы года, Q1 цели, приоритеты месяца
 - Прочитай `{{WORKSPACE_DIR}}/*/MAPSTRATEGIC.md` (если файл есть в репо)
 - **Агрегируй** фазы из MAPSTRATEGIC.md → обнови секцию «Текущие фазы (MAPSTRATEGIC)» в Strategy.md
 - Обнови «Приоритеты месяца» — статусы на основе итогов в WeekPlan
@@ -98,7 +87,7 @@ DS-strategy/
 
 #### 6. Проверить нерегулярные блоки (Session Agenda)
 
-- Прочитай `DS-strategy/docs/Session Agenda.md`
+- Прочитай `{{GOVERNANCE_REPO}}/docs/Session Agenda.md`
 - Определи: какие нерегулярные блоки применимы на этой неделе? (ретро, архитектура, разбор документа и др.)
 - Если есть — добавь в повестку
 
@@ -124,16 +113,19 @@ DS-strategy/
 3. ~~WeekReport~~ — отдельный файл больше не создаётся (deprecated). Итоги — секция в WeekPlan.
 4. Перемести предыдущий `SchedulerReport *.md` из `current/` в `archive/scheduler-reports/` (если есть и не текущий)
 5. **Архивация WP context files (safety net — Close уже архивирует done-файлы):**
-   - Для каждого `inbox/WP-*.md` сверь статус с `memory/MEMORY.md` (source-of-truth)
+   - Для каждого `inbox/WP-*.md` сверь статус с MEMORY.md (source-of-truth)
    - `status: done` / `merged` / `drop` всё ещё в inbox? → переместить в `archive/wp-contexts/` (Close пропустил)
-   - Если фронтматтер WP-файла не совпадает с `memory/MEMORY.md` → обновить фронтматтер перед перемещением
+   - Если фронтматтер WP-файла не совпадает с MEMORY.md → обновить фронтматтер перед перемещением
 6. **Полная очистка inbox/ (еженедельно, единственный владелец — Session-Prep):**
-   - `extraction-reports/` — отчёты старше 7 дней → удали (информация уже в Pack)
+   - `extraction-reports/` — учитывай `status` во frontmatter (инвариант «capture не исчезает без решения»):
+     - `status ∈ {applied, rejected, no-pending}` и старше 7 дней → удали (решение принято, информация в Pack/feedback-log)
+     - `status ∈ {pending-review, partially-applied, deferred}` → **не трогай** (ждут разбора через `/apply-captures`)
+     - Без frontmatter или без поля `status` → оставить (считать pending-review)
    - `captures.md` — записи с `[processed ...]` старше 14 дней → **архивируй** в `archive/captures/captures-{period}.md` (НЕ удалять — это аудитный след записи в Pack). Записи с `[rejected ...]` старше 14 дней → архивируй туда же.
    - Записи **без** метки `[processed]` или `[rejected]` → оставить (ещё не обработаны Экстрактором)
    - Прочие файлы (не fleeting-notes.md, не captures.md, не активные WP-*) → «Ещё нужен?» Нет → удали или `archive/notes/`
 7. Создай `current/WeekPlan W{N} YYYY-MM-DD.md` (Пн текущей недели)
-8. Закоммить в DS-strategy
+8. Закоммить в {{GOVERNANCE_REPO}}
 
 **Формат WeekPlan:**
 
@@ -187,11 +179,6 @@ agent: Стратег
 ### 📌 Предложения в РП
 - "текст заметки" → предлагаю WP на неделю (бюджет ~Xh)
 - "текст заметки 🔄" → scope прояснился: [конкретное действие]
-
-### ♻️ Recovery return loop
-- recovered item → вернуть в WeekPlan как РП #N
-- recovered item → оставить в INBOX backlog с конкретным следующим шагом
-- broken-source recovery → оставить в recovery до восстановления контекста, но явно не терять
 
 ### ❓ На решение
 - "текст заметки 🔄 (>7 дней)" — идея, требует обсуждения на сессии
@@ -247,5 +234,5 @@ agent: Стратег
    - Обновить статусы РП (done/in_progress/pending)
    - Добавить новые РП
    - Убрать done/archived
-3. **`memory/MEMORY.md`** — синхронизировать таблицу «РП текущей недели»
+3. **MEMORY.md** — синхронизировать таблицу «РП текущей недели»
 4. Закоммитить все изменения

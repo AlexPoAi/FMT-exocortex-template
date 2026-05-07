@@ -12,8 +12,7 @@
 
 | Домен | Pack | Префикс | Путь |
 |-------|------|---------|------|
-| _Твой домен (напр. Machine Learning)_ | _PACK-my-domain_ | _MD_ | _/Users/alexander/Github/PACK-my-domain/pack/my-domain/_ |
-| IWE культура, ритуалы, агентные нормы | PACK-iwe-culture | IWC | /Users/alexander/Github/PACK-iwe-culture/ |
+| _Твой домен (напр. Machine Learning)_ | _PACK-my-domain_ | _MD_ | _{{WORKSPACE_DIR}}/PACK-my-domain/pack/my-domain/_ |
 
 <!-- Удали пример выше и добавь свои Pack'и. Формат:
 | Домен (ключевые слова) | Имя Pack-репо | Короткий префикс (2-3 буквы) | Путь к pack/ директории |
@@ -30,7 +29,7 @@
 | Failure mode | `fm` | `05-failure-modes/` | Отдельный файл |
 | Характеристика | `chr` | `06-characteristics/` | Отдельный файл |
 | SoTA-аннотация | `sota` | `08-sota/` | Отдельный файл |
-| Правило (глобальное) | `rule` | `/Users/alexander/Github/CLAUDE.md` | Строки |
+| Правило (глобальное) | `rule` | `{{WORKSPACE_DIR}}/CLAUDE.md` | Строки |
 | Правило (локальное) | `rule` | `<repo>/CLAUDE.md` | Строки |
 | Правило (урок) | `rule` | `memory/<topic>.md` | Строки |
 
@@ -73,7 +72,7 @@
 
 | Система | DS-репо | Путь к docs/ |
 |---------|--------|-------------|
-| _Мой бот_ | _your-org/my-bot_ | _/Users/alexander/Github/your-org/my-bot/docs/_ |
+| _Мой бот_ | _your-org/my-bot_ | _{{WORKSPACE_DIR}}/your-org/my-bot/docs/_ |
 
 <!-- Удали пример и добавь свои DS-репо -->
 
@@ -111,4 +110,4 @@ DS-кандидаты **не требуют** frontmatter с trust/epistemic_sta
 
 ---
 
-*Последнее обновление: 2026-05-01*
+*Последнее обновление: {{сегодняшняя дата}}*

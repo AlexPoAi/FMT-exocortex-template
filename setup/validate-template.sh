@@ -41,11 +41,11 @@ TEMPLATE_DIR="${TEMPLATE_DIR:-$HOME/IWE/FMT-exocortex-template}"
 FAIL=0
 
 # Guard: post-setup state + default pristine mode → подсказать installed-режим и выйти.
-# Детектор стабильный: /Users/alexander в pristine FMT/CLAUDE.md гарантирован (используется в §4 Memory + §9 Авторское).
+# Детектор стабильный: {{HOME_DIR}} в pristine FMT/CLAUDE.md гарантирован (используется в §4 Memory + §9 Авторское).
 if [ "$MODE" = "pristine" ] \
    && [ -f "$TEMPLATE_DIR/CLAUDE.md" ] \
-   && ! grep -q '/Users/alexander' "$TEMPLATE_DIR/CLAUDE.md" 2>/dev/null; then
-    echo "ВНИМАНИЕ: FMT обработан setup.sh (плейсхолдер /Users/alexander в CLAUDE.md уже подставлен)."
+   && ! grep -q '{{HOME_DIR}}' "$TEMPLATE_DIR/CLAUDE.md" 2>/dev/null; then
+    echo "ВНИМАНИЕ: FMT обработан setup.sh (плейсхолдер {{HOME_DIR}} в CLAUDE.md уже подставлен)."
     echo ""
     echo "Pristine-режим (default) применим к:"
     echo "  • CI (.github/workflows/validate-template.yml)"

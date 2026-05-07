@@ -28,7 +28,7 @@
 
 set -eu
 
-IWE_ROOT="${IWE_ROOT:-${IWE_WORKSPACE:-$HOME/IWE}}"
+IWE_ROOT="${IWE_ROOT:-$HOME/IWE}"
 DRIFT_CRITICAL=""
 
 while [ $# -gt 0 ]; do
@@ -224,7 +224,7 @@ if [ -f "$DRIFT_SCRIPT" ]; then
     set -e
     if [ $DRIFT_RC -ne 0 ]; then
         echo ""
-        echo "_iwe-drift.sh exit code: ${DRIFT_RC}_"
+        echo "_iwe-drift.sh exit code: $DRIFT_RC_"
     fi
 else
     echo "❌ \`scripts/iwe-drift.sh\` не найден — drift-сверка пропущена"
@@ -274,8 +274,8 @@ else
     echo ""
 
     # Шаблон ищется в двух местах:
-    # (1) /Users/alexander/Github/FMT-strategy-template/ — отдельная директория (авторская)
-    # (2) /Users/alexander/Github/FMT-exocortex-template/templates/strategy-skeleton/ — внутри FMT (приезжает через update.sh)
+    # (1) {{WORKSPACE_DIR}}/FMT-strategy-template/ — отдельная директория (авторская)
+    # (2) {{WORKSPACE_DIR}}/FMT-exocortex-template/templates/strategy-skeleton/ — внутри FMT (приезжает через update.sh)
     FMT_DIR="$IWE_ROOT/FMT-strategy-template"
     if [ ! -d "$FMT_DIR" ] && [ -d "$IWE_ROOT/FMT-exocortex-template/templates/strategy-skeleton" ]; then
         FMT_DIR="$IWE_ROOT/FMT-exocortex-template/templates/strategy-skeleton"
@@ -431,28 +431,28 @@ echo ""
 
 echo "### Конфигурация (.exocortex.env)"
 echo ""
-ENV_FILE=""
+# WP-273: setup.sh ≥0.7.0 сохраняет .exocortex.env в $IWE_ROOT/, не в $HOME/
 if [ -f "$IWE_ROOT/.exocortex.env" ]; then
     ENV_FILE="$IWE_ROOT/.exocortex.env"
-elif [ -f "$HOME/.exocortex.env" ]; then
-    ENV_FILE="$HOME/.exocortex.env"
+else
+    ENV_FILE="$HOME/.exocortex.env"  # legacy: installs before setup.sh ≥0.7.0
 fi
 if [ ! -f "$ENV_FILE" ]; then
     if [ "$AUTHOR_MODE" = "1" ]; then
         echo "ℹ️ \`.exocortex.env\` не нужен в author_mode (плейсхолдеры подставляются template-sync.sh, не update.sh)."
     else
-        echo "❌ Файл \`.exocortex.env\` отсутствует — update.sh не сможет подставить плейсхолдеры. Решение: запустить \`bash $IWE_ROOT/setup.sh\` (если первая установка) или восстановить конфигурацию."
+        echo "❌ Файл \`.exocortex.env\` отсутствует — update.sh не сможет подставить плейсхолдеры. Решение: запустить \`bash $IWE_ROOT/setup.sh\`."
         UPD_FAIL=$((UPD_FAIL + 1))
     fi
 else
     set +e
     GH_USER=$(grep -E "^GITHUB_USER=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
     set -e
-    if [ -z "$GH_USER" ] || [ "$GH_USER" = "{{GITHUB_USER}}" ] || [ "$GH_USER" = "your-username" ]; then
-        echo "⚠️ \`GITHUB_USER\` пуст или = плейсхолдер. Решение: отредактировать \`$ENV_FILE\`, проставить логин."
+    if [ -z "$GH_USER" ] || [ "$GH_USER" = "{{GITHUB_USER}}" ]; then
+        echo "⚠️ \`GITHUB_USER\` пуст или = плейсхолдер. Решение: отредактировать \`~/.exocortex.env\`, проставить логин."
         UPD_WARN=$((UPD_WARN + 1))
     else
-        echo "✅ \`GITHUB_USER=$GH_USER\` заполнен (\`$ENV_FILE\`)"
+        echo "✅ \`GITHUB_USER=$GH_USER\` заполнен"
     fi
 fi
 echo ""

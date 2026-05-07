@@ -1,6 +1,16 @@
 ---
 valid_from: 2026-03-17
 originSessionId: 9a0e726a-951e-4408-9e02-94d7eeffbf74
+
+type: protocol
+horizon: warm
+domains: [reference]
+status: active
+owner: user
+schema_version: 1
+
+name: "checklists"
+description: "Операционный файл памяти IWE"
 ---
 # Чеклисты
 
@@ -25,7 +35,7 @@ originSessionId: 9a0e726a-951e-4408-9e02-94d7eeffbf74
 
 - [ ] `grep -r "Github/<old-path>/"` по ВСЕМ репо — найти ВСЕ внутренние ссылки
 - [ ] Скрипты (.sh): hardcoded пути `$HOME/Github/...`
-- [ ] Промпты (.md): `/Users/alexander/IWE/...` пути к config/routing
+- [ ] Промпты (.md): `{{HOME_DIR}}/IWE/...` пути к config/routing
 - [ ] Конфиги (config.yaml): `script:` поля
 - [ ] LaunchD templates (.plist): `<string>/Users/.../</string>`
 - [ ] Загруженные plist в `~/Library/LaunchAgents/` (отдельно от шаблонов в репо!)
@@ -37,7 +47,7 @@ originSessionId: 9a0e726a-951e-4408-9e02-94d7eeffbf74
 
 ## При ручной очистке fleeting-notes (🔄 заметки)
 
-- [ ] Прочитать `DS-strategy/current/WeekPlan W*.md` → таблицу РП (описания с ✅)
+- [ ] Прочитать MEMORY.md → таблицу РП (описания с ✅)
 - [ ] Для каждой 🔄 заметки: проверить — покрыт ли intent заметки результатом РП?
 - [ ] Если покрыт → архивировать как «Уже реализовано», НЕ оставлять 🔄
 

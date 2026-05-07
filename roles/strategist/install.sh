@@ -24,7 +24,6 @@ fi
 
 echo "Installing Strategist Agent launchd jobs..."
 echo "  LAUNCHD_DIR: $LAUNCHD_DIR"
-echo "  Mode: scheduler-managed (direct Strategist launchd jobs disabled)"
 
 # WP-273 R5 fix (Round 5 Евгения): fail-fast если выбранный plist содержит literal {{...}}.
 # Это предотвращает копирование незаменённых плейсхолдеров в ~/Library/LaunchAgents/
@@ -42,16 +41,22 @@ for plist_check in "$LAUNCHD_DIR/com.strategist.morning.plist" "$LAUNCHD_DIR/com
     fi
 done
 
-# Unload old direct agents if present. Strategist is dispatched by
-# com.exocortex.scheduler; direct jobs duplicate runs and health-check treats them
-# as a runtime conflict.
+# Unload old agents if present
 launchctl unload "$TARGET_DIR/com.strategist.morning.plist" 2>/dev/null || true
 launchctl unload "$TARGET_DIR/com.strategist.weekreview.plist" 2>/dev/null || true
+
+# Copy new plist files
+cp "$LAUNCHD_DIR/com.strategist.morning.plist" "$TARGET_DIR/"
+cp "$LAUNCHD_DIR/com.strategist.weekreview.plist" "$TARGET_DIR/"
 
 # Make script executable (runtime path)
 if [ -f "$SCRIPT_TARGET" ]; then
     chmod +x "$SCRIPT_TARGET"
 fi
 
-echo "Done. Direct Strategist jobs are unloaded; scheduler owns Strategist dispatch."
-launchctl list | grep strategist || true
+# Load agents
+launchctl load "$TARGET_DIR/com.strategist.morning.plist"
+launchctl load "$TARGET_DIR/com.strategist.weekreview.plist"
+
+echo "Done. Agents loaded:"
+launchctl list | grep strategist

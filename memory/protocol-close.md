@@ -4,6 +4,12 @@ description: Slim-ядро протокола Close — триггеры, мар
 type: reference
 valid_from: 2026-04-13
 originSessionId: b5655b53-7d87-478a-aad9-437479e81691
+
+horizon: warm
+domains: [protocol]
+status: active
+owner: user
+schema_version: 1
 ---
 # Протокол Close (ОРЗ-фрактал)
 
@@ -21,7 +27,6 @@ originSessionId: b5655b53-7d87-478a-aad9-437479e81691
 
 > **`close` без уточнения** → Quick Close (сессия) по умолчанию.
 
----
 
 ## Quick Close (сессия, inline)
 
@@ -31,8 +36,11 @@ originSessionId: b5655b53-7d87-478a-aad9-437479e81691
 
 ### Шаги (4 обязательных)
 
-1. **Commit + Push** — все изменения зафиксированы
-   **EXTENSION POINT (protocol-close checks):** `bash .claude/scripts/load-extensions.sh protocol-close checks` — exit 0 → `Read` каждый файл из вывода (alphabetic) → выполнить. Exit 1 → пропустить. Поддерживает `extensions/protocol-close.checks.md` И `extensions/protocol-close.checks.<suffix>.md`.
+1. **Pre-commit checks → Commit + Push**
+
+   **1a. Pre-commit checks (БЛОКИРУЮЩЕЕ).** `bash .claude/scripts/load-extensions.sh protocol-close checks` — exit 0 → `Read` каждый файл из вывода (alphabetic) → выполнить. Exit 1 → пропустить. Поддерживает `extensions/protocol-close.checks.md` И `extensions/protocol-close.checks.<suffix>.md`. **При ❌ commit запрещён** — исправить, повторить checks, только потом 1b. Семантика идентична Day/Week Close (см. `run-protocol/SKILL.md` Шаг 1b).
+
+   **1b. Commit + Push.** После прохождения checks все изменения зафиксированы и запушены.
 
 2. **WP Context File** — обновить секцию «Осталось» (structured формат):
    - in_progress → structured handoff
@@ -89,8 +97,8 @@ originSessionId: b5655b53-7d87-478a-aad9-437479e81691
 - [ ] KE: «Что узнали» маршрутизировано (или «нет нового знания»)
 - [ ] MEMORY.md: статус РП обновлён
 - [ ] Decision log: прочитать записи сессии в `decisions/decision-log-YYYY-MM.md`, скорректировать если неточно
+- [ ] **Docs Gate (условный):** РП затрагивал поведение онбординга (skills, MCP-сервисы, бот `/start`)? → обновить онбординг-документацию в governance-репо + `/verify` обновлённый файл. Владелец: пользователь. Если не затрагивал → пропустить молча.
 
----
 
 ## Deferred (отложены до Day Close)
 
@@ -98,7 +106,6 @@ originSessionId: b5655b53-7d87-478a-aad9-437479e81691
 > KE включён (шаг 2.5) — знание теряется при откладывании на Day Close.
 > Причина (ADR-207): атомарные шаги выполняются всегда > длинный список, из которого половина пропускается.
 
----
 
 ## Exit Protocol (при завершении любой роли)
 

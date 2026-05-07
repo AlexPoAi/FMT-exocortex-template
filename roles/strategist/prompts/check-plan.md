@@ -4,7 +4,7 @@
 
 ## Контекст
 
-- Планы: /Users/alexander/Github/{{GOVERNANCE_REPO}}/current/
+- Планы: {{WORKSPACE_DIR}}/{{GOVERNANCE_REPO}}/current/
 
 ## Алгоритм
 

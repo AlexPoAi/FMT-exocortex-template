@@ -17,13 +17,15 @@ Keep rules:
   - everything else → processed, ARCHIVE
 """
 
+import os
 import re
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-WORKSPACE = Path.home() / "IWE" / "DS-strategy"
+GOVERNANCE_REPO = os.environ.get('IWE_GOVERNANCE_REPO', 'DS-strategy')
+WORKSPACE = Path.home() / "IWE" / GOVERNANCE_REPO
 FLEETING = WORKSPACE / "inbox" / "fleeting-notes.md"
 ARCHIVE = WORKSPACE / "archive" / "notes" / "Notes-Archive.md"
 

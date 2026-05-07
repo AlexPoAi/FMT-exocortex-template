@@ -2,10 +2,8 @@
 # Шаблон уведомлений: Стратег (R1)
 # Вызывается из notify.sh через source
 
-WORKSPACE_DIR="${WORKSPACE_DIR:-/Users/alexander/Github}"
-GOVERNANCE_REPO="${GOVERNANCE_REPO:-DS-strategy}"
-STRATEGY_DIR="$WORKSPACE_DIR/$GOVERNANCE_REPO/current"
-STRATEGY_REPO_DIR="$WORKSPACE_DIR/$GOVERNANCE_REPO"
+STRATEGY_DIR="{{WORKSPACE_DIR}}/{{GOVERNANCE_REPO}}/current"
+STRATEGY_REPO_DIR="{{WORKSPACE_DIR}}/{{GOVERNANCE_REPO}}"
 DATE=$(date +%Y-%m-%d)
 
 find_strategy_file() {
