@@ -500,7 +500,7 @@ human_layer_strategist_status() {
         return
     fi
 
-    beacon_status="$(sed -n 's/^- Общий статус: \*\*\(.*\)\*\*$/\1/p' "$STRATEGIST_BOARD_BEACON_FILE" | head -n1)"
+    beacon_status="$(sed -n 's/^- Общий статус: \*\*\(.*\)\*\*$/\1/p' "$STRATEGIST_BOARD_BEACON_FILE" 2>/dev/null | head -n1)"
     case "$beacon_status" in
         свежо) echo "ok" ;;
         "требует внимания") echo "needs_attention" ;;
@@ -813,6 +813,20 @@ if [ ${#STALE[@]} -gt 0 ]; then
     MESSAGE+="💤 Норма после перезагрузки (${#STALE[@]}):\n"
     MESSAGE+="${stale_list}\n"
     MESSAGE+="→ Обновятся при следующем запуске\n"
+fi
+
+# Obsidian-метрики
+obsidian_section=""
+if [ -d "${OBSIDIAN_FLEETING_DIR:-}" ]; then
+    fleeting_count=$(find "$OBSIDIAN_FLEETING_DIR" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    obsidian_section+="📝 Исчезающих заметок: ${fleeting_count}\n"
+fi
+if [ -f "${EXOCORTEX_CAPTURES_FILE:-}" ]; then
+    captures_count=$(grep -c '^##' "$EXOCORTEX_CAPTURES_FILE" 2>/dev/null || echo 0)
+    obsidian_section+="📥 Очередь captures: ${captures_count}\n"
+fi
+if [ -n "$obsidian_section" ]; then
+    MESSAGE+="\n🗂 Obsidian\n${obsidian_section}"
 fi
 
 notify_macos "Экзокортекс: проверка среды" "Проверь AGENTS-STATUS.md и экран открытия сессии"
