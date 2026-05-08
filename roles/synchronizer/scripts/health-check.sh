@@ -26,6 +26,11 @@ SELECTION_BOARD_DIR="$OBSIDIAN_VAULT_DIR/Доска выбора"
 SELECTION_BOARD_BEACON_FILE="$SELECTION_BOARD_DIR/00-Сводка доски выбора.md"
 STRATEGIST_BOARD_DIR="$OBSIDIAN_VAULT_DIR/Доска стратега"
 STRATEGIST_BOARD_BEACON_FILE="$STRATEGIST_BOARD_DIR/00-Свежесть доски стратега.md"
+OBSIDIAN_FLEETING_DIR="${OBSIDIAN_FLEETING_DIR:-$OBSIDIAN_VAULT_DIR/1. Исчезающие заметки}"
+OBSIDIAN_FLEETING_ARCHIVE_DIR="${OBSIDIAN_FLEETING_ARCHIVE_DIR:-$OBSIDIAN_VAULT_DIR/System/Архив исчезающих заметок}"
+EXOCORTEX_CAPTURES_FILE="${EXOCORTEX_CAPTURES_FILE:-$WORKSPACE_DIR/DS-strategy/inbox/captures.md}"
+OBSIDIAN_INTAKE_LOG_FILE="$HOME/logs/extractor/launchd-obsidian-fleeting-intake.log"
+OBSIDIAN_INTAKE_LABEL="com.extractor.obsidian-fleeting-intake"
 
 mkdir -p "$LOG_DIR"
 
@@ -78,6 +83,15 @@ timestamp_to_epoch() {
         return
     }
     date -j -f '%Y-%m-%d %H:%M:%S' "$ts" '+%s' 2>/dev/null || date -d "$ts" '+%s' 2>/dev/null || echo 0
+}
+
+file_mtime_epoch() {
+    local file="$1"
+    [ -f "$file" ] || {
+        echo 0
+        return
+    }
+    stat -f '%m' "$file" 2>/dev/null || stat -c '%Y' "$file" 2>/dev/null || echo 0
 }
 
 task_reference_ts() {
@@ -545,6 +559,73 @@ check_human_layer_contract() {
     esac
 }
 
+check_obsidian_contour() {
+    local stale_sec=172800
+    local log_epoch age imported_line
+
+    if [ -d "$OBSIDIAN_VAULT_DIR" ]; then
+        log "ОК: Obsidian vault доступен: $OBSIDIAN_VAULT_DIR"
+    else
+        ERRORS+=("🔴 Obsidian vault missing: $OBSIDIAN_VAULT_DIR")
+        log "ОШИБКА: Obsidian vault missing: $OBSIDIAN_VAULT_DIR"
+        return
+    fi
+
+    if [ -d "$OBSIDIAN_FLEETING_DIR" ]; then
+        log "ОК: Obsidian fleeting dir доступен: $OBSIDIAN_FLEETING_DIR"
+    else
+        WARNINGS+=("🟡 Obsidian fleeting dir missing: $OBSIDIAN_FLEETING_DIR")
+        log "ВНИМАНИЕ: Obsidian fleeting dir missing: $OBSIDIAN_FLEETING_DIR"
+    fi
+
+    if [ -d "$OBSIDIAN_FLEETING_ARCHIVE_DIR" ]; then
+        log "ОК: Obsidian archive dir доступен: $OBSIDIAN_FLEETING_ARCHIVE_DIR"
+    else
+        WARNINGS+=("🟡 Obsidian archive dir missing: $OBSIDIAN_FLEETING_ARCHIVE_DIR")
+        log "ВНИМАНИЕ: Obsidian archive dir missing: $OBSIDIAN_FLEETING_ARCHIVE_DIR"
+    fi
+
+    if [ -f "$EXOCORTEX_CAPTURES_FILE" ]; then
+        log "ОК: captures file доступен: $EXOCORTEX_CAPTURES_FILE"
+    else
+        ERRORS+=("🔴 captures file missing: $EXOCORTEX_CAPTURES_FILE")
+        log "ОШИБКА: captures file missing: $EXOCORTEX_CAPTURES_FILE"
+    fi
+
+    if command -v launchctl >/dev/null 2>&1; then
+        if launchctl list | grep -q "$OBSIDIAN_INTAKE_LABEL"; then
+            log "ОК: launchd intake job loaded: $OBSIDIAN_INTAKE_LABEL"
+        else
+            WARNINGS+=("🟡 launchd intake job not loaded: $OBSIDIAN_INTAKE_LABEL")
+            log "ВНИМАНИЕ: launchd intake job not loaded: $OBSIDIAN_INTAKE_LABEL"
+        fi
+    fi
+
+    if [ -f "$OBSIDIAN_INTAKE_LOG_FILE" ]; then
+        log_epoch=$(file_mtime_epoch "$OBSIDIAN_INTAKE_LOG_FILE")
+        if [ "$log_epoch" -gt 0 ]; then
+            age=$((NOW_EPOCH - log_epoch))
+            if [ "$age" -le "$stale_sec" ]; then
+                log "ОК: Obsidian intake log свежий ($(format_epoch "$log_epoch"))"
+            else
+                WARNINGS+=("🟡 Obsidian intake log stale: $OBSIDIAN_INTAKE_LOG_FILE")
+                log "ВНИМАНИЕ: Obsidian intake log stale: $OBSIDIAN_INTAKE_LOG_FILE (last $(format_epoch "$log_epoch"))"
+            fi
+        fi
+
+        imported_line=$(tail -n 20 "$OBSIDIAN_INTAKE_LOG_FILE" 2>/dev/null | grep -E 'imported=' | tail -n1 || true)
+        if [ -n "$imported_line" ]; then
+            log "ОК: intake activity marker: $imported_line"
+        else
+            WARNINGS+=("🟡 Obsidian intake log has no recent imported marker")
+            log "ВНИМАНИЕ: Obsidian intake log has no recent imported marker"
+        fi
+    else
+        WARNINGS+=("🟡 Obsidian intake log missing: $OBSIDIAN_INTAKE_LOG_FILE")
+        log "ВНИМАНИЕ: Obsidian intake log missing: $OBSIDIAN_INTAKE_LOG_FILE"
+    fi
+}
+
 load_status() {
     local task="$1"
     local file="$STATUS_DIR/${task}.status"
@@ -647,6 +728,7 @@ check_opening_contract
 check_runtime_contract
 check_legacy_launchd_conflicts
 check_strategist_notify_contract
+check_obsidian_contour
 check_human_layer_contract
 
 for task in strategist-morning strategist-note-review strategist-week-review synchronizer-code-scan synchronizer-daily-report extractor-inbox-check; do
