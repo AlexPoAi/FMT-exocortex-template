@@ -222,7 +222,10 @@ case "$1" in
             # используем `\b` (word boundary), а не `\]`, чтобы ловить датированные маркеры.
             # Старый подход (PENDING - PROCESSED - ANALYZED с `grep -c '\[analyzed'`) ловил подстроки
             # в описаниях/цитатах → получался мультисчёт и ложные «N pending» срабатывания.
-            ACTUAL_PENDING=$(grep -E '^### ' "$CAPTURES_FILE" 2>/dev/null | grep -vE '\[(analyzed|processed|duplicate|defer)\b' | wc -l | tr -d ' ')
+            ACTUAL_PENDING=$(grep -E '^### ' "$CAPTURES_FILE" 2>/dev/null \
+                | grep -vE '^### \[Название знания\]$' \
+                | grep -vE '\[(analyzed|processed|duplicate|defer|rejected)\b' \
+                | wc -l | tr -d ' ')
             ACTUAL_PENDING=${ACTUAL_PENDING:-0}
 
             if [ "$ACTUAL_PENDING" -le 0 ]; then

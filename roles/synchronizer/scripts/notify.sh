@@ -75,8 +75,32 @@ send_telegram() {
     if [ "$ok" = "True" ]; then
         echo "Telegram notification sent: $AGENT/$SCENARIO"
     else
-        echo "Telegram send FAILED: $AGENT/$SCENARIO"
-        echo "Response: $response"
+        # Fallback: retry without parse_mode to avoid HTML parser failures
+        # (e.g. "Bad Request: can't parse entities").
+        local json_body_plain
+        if [ "$buttons" = "[]" ]; then
+            json_body_plain=$(printf '{"chat_id":"%s","text":%s,"disable_web_page_preview":true}' \
+                "$TELEGRAM_CHAT_ID" "$escaped_text")
+        else
+            json_body_plain=$(printf '{"chat_id":"%s","text":%s,"disable_web_page_preview":true,"reply_markup":{"inline_keyboard":%s}}' \
+                "$TELEGRAM_CHAT_ID" "$escaped_text" "$buttons")
+        fi
+
+        local response_plain
+        response_plain=$(curl -s "${curl_proxy_args[@]}" -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$json_body_plain")
+
+        local ok_plain
+        ok_plain=$(echo "$response_plain" | python3 -c 'import sys,json; print(json.loads(sys.stdin.read()).get("ok",""))' 2>/dev/null || echo "")
+
+        if [ "$ok_plain" = "True" ]; then
+            echo "Telegram notification sent (plain fallback): $AGENT/$SCENARIO"
+        else
+            echo "Telegram send FAILED: $AGENT/$SCENARIO"
+            echo "Response (html): $response"
+            echo "Response (plain): $response_plain"
+        fi
     fi
 }
 

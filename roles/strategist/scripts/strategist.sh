@@ -308,7 +308,19 @@ case "$1" in
 
         # Deterministic cleanup: archive non-bold, non-🔄 notes (safety net for LLM Step 10)
         log "Running deterministic cleanup..."
-        CLEANUP_OUTPUT=$(python3 "$SCRIPT_DIR/cleanup-processed-notes.py" 2>&1) || true
+        cleanup_script="$SCRIPT_DIR/cleanup-processed-notes.py"
+        if [ ! -f "$cleanup_script" ]; then
+            if [ -n "${IWE_TEMPLATE:-}" ] && [ -f "$IWE_TEMPLATE/roles/strategist/scripts/cleanup-processed-notes.py" ]; then
+                cleanup_script="$IWE_TEMPLATE/roles/strategist/scripts/cleanup-processed-notes.py"
+            elif [ -f "$HOME/IWE/FMT-exocortex-template/roles/strategist/scripts/cleanup-processed-notes.py" ]; then
+                cleanup_script="$HOME/IWE/FMT-exocortex-template/roles/strategist/scripts/cleanup-processed-notes.py"
+            fi
+        fi
+        if [ -f "$cleanup_script" ]; then
+            CLEANUP_OUTPUT=$(python3 "$cleanup_script" 2>&1) || true
+        else
+            CLEANUP_OUTPUT="cleanup-processed-notes.py not found (runtime + template)"
+        fi
         log "Cleanup: $CLEANUP_OUTPUT"
 
         # If cleanup made changes, commit and push
@@ -328,9 +340,15 @@ case "$1" in
                 set -a; source "$ENV_FILE"; set +a
                 ALERT_TEXT="⚠️ <b>Note-Review canary</b>: Step 10 не сработал ($BOLD_NEW_BEFORE → $BOLD_NEW_AFTER new bold). Deterministic cleanup applied."
                 ALERT_JSON=$(printf '%s' "$ALERT_TEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
-                curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                ALERT_RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
                     -H "Content-Type: application/json" \
-                    -d "{\"chat_id\":\"${TELEGRAM_CHAT_ID}\",\"text\":${ALERT_JSON},\"parse_mode\":\"HTML\"}" >> "$LOG_FILE" 2>&1 || true
+                    -d "{\"chat_id\":\"${TELEGRAM_CHAT_ID}\",\"text\":${ALERT_JSON},\"parse_mode\":\"HTML\"}" 2>> "$LOG_FILE" || true)
+                ALERT_OK=$(printf '%s' "$ALERT_RESPONSE" | python3 -c 'import sys,json; print(json.loads(sys.stdin.read()).get("ok",""))' 2>/dev/null || echo "")
+                if [ "$ALERT_OK" != "True" ]; then
+                    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                        -H "Content-Type: application/json" \
+                        -d "{\"chat_id\":\"${TELEGRAM_CHAT_ID}\",\"text\":${ALERT_JSON}}" >> "$LOG_FILE" 2>&1 || true
+                fi
             fi
         fi
 
