@@ -42,7 +42,18 @@ for note in "$SRC_DIR"/*.md; do
         echo "---"
     } >> "$CAPTURES_FILE"
 
-    mv "$note" "$ARCHIVE_DIR/$TODAY - $base"
+    archive_target="$ARCHIVE_DIR/$TODAY - $base"
+    if [ -e "$archive_target" ]; then
+        short_hash="${hash:0:12}"
+        archive_target="$ARCHIVE_DIR/$TODAY - ${stem} [$short_hash].md"
+        counter=2
+        while [ -e "$archive_target" ]; do
+            archive_target="$ARCHIVE_DIR/$TODAY - ${stem} [$short_hash-$counter].md"
+            counter=$((counter + 1))
+        done
+    fi
+
+    mv "$note" "$archive_target"
     imported=$((imported + 1))
 done
 
