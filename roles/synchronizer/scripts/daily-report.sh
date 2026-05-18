@@ -14,36 +14,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STATE_DIR="$HOME/.local/state/exocortex"
-HOME_BASE="{{HOME_DIR}}"
-WORKSPACE_BASE="{{WORKSPACE_DIR}}"
-GOVERNANCE_REPO_VAL="{{GOVERNANCE_REPO}}"
-
-# Direct-run fallback: when this template script is launched without build/runtime substitution,
-# resolve workspace/governance paths from env or canonical resolver.
-if [[ "$HOME_BASE" == *"{{HOME_DIR}}"* ]]; then
-    HOME_BASE="$HOME"
-fi
-
-if [[ "$GOVERNANCE_REPO_VAL" == *"{{GOVERNANCE_REPO}}"* ]]; then
-    GOVERNANCE_REPO_VAL="${IWE_GOVERNANCE_REPO:-DS-strategy}"
-fi
-
-if [[ "$WORKSPACE_BASE" == *"{{WORKSPACE_DIR}}"* ]]; then
-    if [ -f "$SCRIPT_DIR/resolve-workspace.sh" ]; then
-        eval "$(bash "$SCRIPT_DIR/resolve-workspace.sh" --env)" || true
-        WORKSPACE_BASE="${WORKSPACE_DIR:-${IWE_WORKSPACE:-$HOME/Github}}"
-        STRATEGY_DIR="${DS_STRATEGY_DIR:-$WORKSPACE_BASE/$GOVERNANCE_REPO_VAL}"
-        AGENT_WORKSPACE="${DS_AGENT_WORKSPACE_DIR:-$WORKSPACE_BASE/DS-agent-workspace}"
-    else
-        WORKSPACE_BASE="${IWE_WORKSPACE:-$HOME/Github}"
-    fi
-fi
-
-LOG_DIR="$HOME_BASE/logs/synchronizer"
-: "${STRATEGY_DIR:=$WORKSPACE_BASE/$GOVERNANCE_REPO_VAL}"
+LOG_DIR="{{HOME_DIR}}/logs/synchronizer"
+STRATEGY_DIR="{{WORKSPACE_DIR}}/{{GOVERNANCE_REPO}}"
 
 # Agent Workspace: если существует — отчёты идут туда
-: "${AGENT_WORKSPACE:=$WORKSPACE_BASE/DS-agent-workspace}"
+AGENT_WORKSPACE="{{WORKSPACE_DIR}}/DS-agent-workspace"
 if [ -d "$AGENT_WORKSPACE/.git" ]; then
     REPORT_DIR="$AGENT_WORKSPACE/scheduler/reports"
     ARCHIVE_DIR="$AGENT_WORKSPACE/scheduler/reports/archive"
@@ -66,7 +41,7 @@ DRY_RUN=false
 
 REPORT_FILE="$REPORT_DIR/SchedulerReport $DATE.md"
 SCHEDULER_LOG="$LOG_DIR/scheduler-$DATE.log"
-STRATEGIST_LOG="$HOME_BASE/logs/strategist/$DATE.log"
+STRATEGIST_LOG="{{HOME_DIR}}/logs/strategist/$DATE.log"
 
 mkdir -p "$ARCHIVE_DIR"
 

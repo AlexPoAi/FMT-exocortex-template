@@ -29,8 +29,6 @@ else
 fi
 
 LOG_DIR="{{HOME_DIR}}/logs/extractor"
-STATE_DIR="{{HOME_DIR}}/.local/state/exocortex"
-STATUS_DIR="$STATE_DIR/status"
 CLAUDE_PATH="{{CLAUDE_PATH}}"
 ENV_FILE="{{HOME_DIR}}/.config/aist/env"
 
@@ -41,7 +39,6 @@ AI_CLI_EXTRA_FLAGS="${AI_CLI_EXTRA_FLAGS:---dangerously-skip-permissions --allow
 
 # Создаём папку для логов
 mkdir -p "$LOG_DIR"
-mkdir -p "$STATUS_DIR"
 
 DATE=$(date +%Y-%m-%d)
 HOUR=$(date +%H)
@@ -78,40 +75,6 @@ notify_telegram() {
     if [ -f "$notify_script" ]; then
         "$notify_script" extractor "$scenario" >> "$LOG_FILE" 2>&1 || true
     fi
-}
-
-write_inbox_status() {
-    local status="$1"
-    local summary="$2"
-    local start_ts="$3"
-    local end_ts="$4"
-    local exit_code="${5:-0}"
-    local run_id="${6:-$(date +%Y%m%d-%H%M%S)-$$}"
-    local status_file="$STATUS_DIR/extractor-inbox-check.status"
-
-    cat > "$status_file" <<EOF
-TASK_NAME=extractor-inbox-check
-RUN_ID=$run_id
-STATUS=$status
-EXIT_CODE=$exit_code
-SUMMARY='$summary'
-START_TS='$start_ts'
-END_TS='$end_ts'
-LAST_STARTED_AT='$start_ts'
-LAST_FINISHED_AT='$end_ts'
-LAST_SUCCESS_AT='$end_ts'
-LAST_FAILURE_AT=''
-EVIDENCE_STATUS=verified
-EVIDENCE_SUMMARY='runner checked inbox'
-ERROR_SUMMARY=''
-STALENESS_BUDGET_SEC="10800"
-PRODUCED_ARTIFACTS=""
-COMPLETED_WINDOW=true
-LOG_PATH=$LOG_FILE
-UPDATED_AT='$end_ts'
-EOF
-
-    date +%s > "$STATE_DIR/extractor-inbox-check-last"
 }
 
 # Загрузка переменных окружения
@@ -207,9 +170,6 @@ load_env
 # Определяем процесс
 case "$1" in
     "inbox-check")
-        local_run_id="$(date +%Y%m%d-%H%M%S)-$$"
-        local_start_ts="$(date '+%Y-%m-%d %H:%M:%S')"
-
         if ! is_work_hours; then
             log "SKIP: inbox-check outside work hours ($HOUR:00)"
             exit 0
@@ -218,20 +178,31 @@ case "$1" in
         # Быстрая проверка: есть ли captures в inbox
         CAPTURES_FILE="$WORKSPACE/{{GOVERNANCE_REPO}}/inbox/captures.md"
         if [ -f "$CAPTURES_FILE" ]; then
-            # Маркеры имеют вид `[analyzed 2026-MM-DD]`, `[processed 2026-MM-DD]`, `[duplicate]`, `[defer]` —
-            # используем `\b` (word boundary), а не `\]`, чтобы ловить датированные маркеры.
-            # Старый подход (PENDING - PROCESSED - ANALYZED с `grep -c '\[analyzed'`) ловил подстроки
-            # в описаниях/цитатах → получался мультисчёт и ложные «N pending» срабатывания.
-            ACTUAL_PENDING=$(grep -E '^### ' "$CAPTURES_FILE" 2>/dev/null \
-                | grep -vE '^### \[Название знания\]$' \
-                | grep -vE '\[(analyzed|processed|duplicate|defer|rejected)\b' \
-                | wc -l | tr -d ' ')
+            # WP-7 Ф-EXTRACTOR-FP fix (2026-05-08): grep '^### ' ловил все subheading'и,
+            # включая subsections (### Суть / ### Релевантность) внутри analyzed-capture'ов.
+            # На captures.md = 60 false-positive → R2 запускался впустую, отчёт не создавался.
+            # Корень: regex не учитывал что parent-capture имеет meta-секцию (**Источник/**Тип),
+            # а subsections — нет. Также \b не поддерживается в awk (grep-only feature).
+            #
+            # Fix: parent-capture определяется по наличию **Источник/**Тип в первых 8 строках.
+            # Smoke-test 8 мая: 60 false-positive → 1 true-positive.
+            ACTUAL_PENDING=$(awk '
+              /^### / && !/\[(analyzed|processed|duplicate|defer)/ {
+                found = 0
+                for (i = 1; i <= 8; i++) {
+                  if ((getline line) > 0) {
+                    if (line ~ /^\*\*(Источник|Type|Тип|Source|Маркер|Trigger)/) { found = 1; break }
+                    if (line ~ /^### |^## /) break
+                  }
+                }
+                if (found) pending++
+              }
+              END { print pending+0 }
+            ' "$CAPTURES_FILE" 2>/dev/null)
             ACTUAL_PENDING=${ACTUAL_PENDING:-0}
 
             if [ "$ACTUAL_PENDING" -le 0 ]; then
                 log "SKIP: No pending captures in inbox"
-                local_end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
-                write_inbox_status "success" "no pending captures in inbox" "$local_start_ts" "$local_end_ts" "0" "$local_run_id"
                 exit 0
             fi
 
@@ -241,15 +212,8 @@ case "$1" in
             exit 0
         fi
 
-        if run_claude "inbox-check"; then
-            local_end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
-            write_inbox_status "success" "inbox-check completed" "$local_start_ts" "$local_end_ts" "0" "$local_run_id"
-            notify_telegram "inbox-check"
-        else
-            local_end_ts="$(date '+%Y-%m-%d %H:%M:%S')"
-            write_inbox_status "failed" "inbox-check failed" "$local_start_ts" "$local_end_ts" "1" "$local_run_id"
-            exit 1
-        fi
+        run_claude "inbox-check"
+        notify_telegram "inbox-check"
         ;;
 
     "audit")
@@ -261,6 +225,26 @@ case "$1" in
     "session-close")
         log "Running session-close extraction"
         run_claude "session-close"
+        ;;
+
+    "session-close-feed")
+        # WP-247 Ф-MULTI-SOURCE.1: feeder-режим (non-interactive).
+        # Извлекает кандидатов из транскрипта + git diff,
+        # пишет ###-блоки в captures.md с маркером [feed:session-close YYYY-MM-DD].
+        # Не создаёт extraction-report — это работа inbox-check потом.
+        log "Running session-close FEED (non-interactive, writes to captures.md)"
+        run_claude "session-close-feed" "$2"
+        notify_telegram "session-close-feed"
+        ;;
+
+    "git-diff-feed")
+        # WP-247 Ф-MULTI-SOURCE.2: git-diff feeder (cron 06:00/21:00).
+        # Извлекает кандидатов из git log за окно и пишет ###-блоки в captures.md.
+        # Окно: $2 (по умолчанию "12 hours ago").
+        SINCE="${2:-12 hours ago}"
+        log "Running git-diff FEED (since: $SINCE)"
+        run_claude "git-diff-feed" "$SINCE"
+        notify_telegram "git-diff-feed"
         ;;
 
     "on-demand")

@@ -9,13 +9,6 @@ build_message() {
     local scenario="$1"
 
     case "$scenario" in
-        "health-check")
-            # Передаём уже собранное сообщение из health-check.sh через NOTIFY_TEXT
-            if [ -n "${NOTIFY_TEXT:-}" ]; then
-                printf '%s' "$NOTIFY_TEXT"
-            fi
-            ;;
-
         "code-scan")
             local log_file="$LOG_DIR/code-scan-$DATE.log"
 
