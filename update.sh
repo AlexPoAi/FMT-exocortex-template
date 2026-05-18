@@ -548,8 +548,9 @@ fi
 echo ""
 echo "Обновление platform-space..."
 
-# Copy CLAUDE.md to workspace root
+# Copy CLAUDE.md / CODEX.md to workspace root
 CLAUDE_UPDATED=false
+CODEX_UPDATED=false
 for f in "${NEW_FILES[@]}" "${UPDATED_FILES[@]}"; do
     if [ "$f" = "CLAUDE.md" ]; then
         # 3-way merge for workspace CLAUDE.md (same logic as repo copy)
@@ -589,8 +590,14 @@ for f in "${NEW_FILES[@]}" "${UPDATED_FILES[@]}"; do
             echo "  ✓ $WS_CURRENT обновлён (базовый файл создан)"
         fi
         CLAUDE_UPDATED=true
+    elif [ "$f" = "CODEX.md" ]; then
+        cp "$SCRIPT_DIR/CODEX.md" "$WORKSPACE_DIR/CODEX.md"
+        echo "  ✓ $WORKSPACE_DIR/CODEX.md обновлён"
+        CODEX_UPDATED=true
     fi
 done
+$CLAUDE_UPDATED || echo "  ✓ CLAUDE.md без изменений"
+$CODEX_UPDATED || echo "  ✓ CODEX.md без изменений"
 
 # Copy memory files to Claude projects directory
 CLAUDE_PROJECT_SLUG="$(echo "$WORKSPACE_DIR" | tr '/' '-')"

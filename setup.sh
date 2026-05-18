@@ -414,6 +414,18 @@ else
     echo "  Copied to $WORKSPACE_DIR/CLAUDE.md (+ merge base, substituted)"
 fi
 
+# === 2b. Copy CODEX.md to workspace root ===
+# CODEX.md is a thin adapter: Codex must enter through the same FMT/CLAUDE route.
+echo "[2b/6] Installing CODEX.md..."
+if $DRY_RUN; then
+    echo "  [DRY RUN] Would copy: $TEMPLATE_DIR/CODEX.md → $WORKSPACE_DIR/CODEX.md"
+elif [ -f "$TEMPLATE_DIR/CODEX.md" ]; then
+    cp "$TEMPLATE_DIR/CODEX.md" "$WORKSPACE_DIR/CODEX.md"
+    echo "  Copied to $WORKSPACE_DIR/CODEX.md"
+else
+    echo "  ⚠ CODEX.md не найден в шаблоне"
+fi
+
 # === 3. Copy memory to Claude projects directory ===
 echo "[3/6] Installing memory..."
 CLAUDE_MEMORY_DIR="$HOME/.claude/projects/$CLAUDE_PROJECT_SLUG/memory"
@@ -706,6 +718,7 @@ else
     echo ""
     echo "Verify installation:"
     echo "  ✓ CLAUDE.md:   $WORKSPACE_DIR/CLAUDE.md"
+    echo "  ✓ CODEX.md:    $WORKSPACE_DIR/CODEX.md"
     echo "  ✓ Memory:      $CLAUDE_MEMORY_DIR/ ($(ls "$CLAUDE_MEMORY_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ') files)"
     echo "  ✓ Symlink:     $WORKSPACE_DIR/memory → $CLAUDE_MEMORY_DIR"
     echo "  ✓ DS-strategy: $MY_STRATEGY_DIR/"
